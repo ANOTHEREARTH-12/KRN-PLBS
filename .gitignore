@@ -1,0 +1,6 @@
+.DS_Store
+Thumbs.db
+node_modules/
+*.log
+# Never commit client backups
+KRN_PLBS_Backup_*.json
