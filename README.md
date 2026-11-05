@@ -5,10 +5,11 @@ A single-file web app (`index.html`) for KRN Tax Consultancy to prepare Trading,
 ## Features
 
 - Password screen with an animated character; the portal opens only after the correct password (only a salted hash is stored in the code)
-- Client master (name, PAN, address, entity type, signatory) with every financial year stored under the client
+- Client master (legal name, trade name, PAN, address, entity type, signatory) with every financial year stored under the client
 - Trading account is optional; switch it off for service businesses
 - Proprietorship, Partnership / LLP (interest, remuneration, profit sharing) and Company layouts
 - Fixed-asset block with WDV depreciation feeding both P&L and Balance Sheet
+- Live totals while typing: sticky summary bar, column subtotals, and a clear "how much to adjust" message on the Balance Sheet
 - Create next FY: closing balances carry forward automatically
 - Password lock on opening (set on first use; change it under Settings → Security)
 - Export to PDF (horizontal T-format with schedules and signature block)

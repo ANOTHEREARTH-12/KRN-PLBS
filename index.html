@@ -58,7 +58,7 @@ td{padding:8px;border-bottom:1px solid #f0f1fa;vertical-align:middle}td.r,th.r{t
 .tag{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
 .t1{background:#e7e5ff;color:var(--pri2)}.t2{background:var(--okbg);color:var(--ok)}.t3{background:#fff1d6;color:#b36b00}.t4{background:#e0f2fe;color:#0369a1}.t5{background:var(--errbg);color:var(--err)}
 .bar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-radius:12px;font-weight:600;margin-bottom:16px;background:var(--okbg);color:var(--ok)}
-.bar.err{background:var(--errbg);color:var(--err)}.bar span.sp{margin-left:auto}
+.bar.err{background:var(--errbg);color:var(--err)}.bar.sticky{position:sticky;top:0;z-index:30;box-shadow:0 8px 18px #1b1f3b26}.bar b{font-variant-numeric:tabular-nums}.bar span.sp{margin-left:auto}
 .chk{display:none}.sw{display:flex;align-items:center;gap:10px;cursor:pointer}
 .tg{width:40px;height:22px;border-radius:12px;background:#c9cce6;position:relative;flex:none;transition:.15s}
 .tg:after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
@@ -188,7 +188,7 @@ function compute(c,y){
     const P=b.partners||[],rate=dnum(b.interestRate);
     const ints=P.map(p=>Math.round(num(p.openCapital)*rate/100)),rems=P.map(p=>num(p.remuneration));
     const ti=ints.reduce((s,x)=>s+x,0),tr=rems.reduce((s,x)=>s+x,0),pool=np-ti-tr;
-    const rs=P.reduce((s,p)=>s+Math.max(dnum(p.ratio),0),0);
+    const rs=P.reduce((s,p)=>s+Math.max(dnum(p.ratio),0),0);o.ratioSum=rs;
     let shares=P.map(()=>0);
     if(rs>0&&P.length){shares=P.map(p=>Math.round(pool*Math.max(dnum(p.ratio),0)/rs));shares[P.length-1]+=pool-shares.reduce((s,x)=>s+x,0);}else if(P.length)o.noRatio=true;
     o.partners=P.map((p,i)=>({name:p.name||('Partner '+(i+1)),open:num(p.openCapital),int:ints[i],rem:rems[i],share:shares[i],draw:num(p.drawings),
@@ -197,7 +197,7 @@ function compute(c,y){
   }else{o.surplusClose=num(b.openSurplus)+np-num(b.dividend);o.capTotal=num(b.shareCapital)+o.surplusClose;}
   const liabOther=num(b.secured)+num(b.unsecured)+num(b.creditors)+num(b.taxes)+sum(b.otherLiab);
   const stock=hasT?num(t.closingStock):0;
-  o.stock=stock;o.bankTotal=sum(b.banks);
+  o.stock=stock;o.bankTotal=sum(b.banks);o.tradeDr=hasT?num(t.openStock)+num(t.purchases)+direct:0;o.tradeCr=hasT?num(t.sales)+num(t.closingStock):0;o.curAssets=stock+num(b.debtors)+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
   const tl=o.capTotal+liabOther,ta=faClose+stock+num(b.debtors)+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
   const diff=ta-tl;o.diff=diff;o.susL=0;o.susA=0;
   if(b.autoBalance){if(diff>0)o.susL=diff;else if(diff<0)o.susA=-diff;}
@@ -303,6 +303,9 @@ function statements(c,y){
   }
   return S;
 }
+const hasTrade=c=>!!(c.trade&&String(c.trade).trim());
+const dispName=c=>hasTrade(c)?String(c.trade).trim():c.name;
+function titleHTML(c){return hasTrade(c)?'<h2>'+esc(String(c.trade).trim().toUpperCase())+' <small style="font-size:11px;font-weight:400;letter-spacing:0;color:#555;font-family:inherit">(Legal Name: '+esc(c.name)+')</small></h2>':'<h2>'+esc((c.name||'').toUpperCase())+'</h2>';}
 const roleOf=c=>({prop:'Proprietor',firm:'Partner',co:'Director'}[kindOf(c)]);
 
 /* ---------- HTML preview ---------- */
@@ -318,7 +321,7 @@ function tblHTML(t){
 }
 function docHTML(c,y){
   const S=statements(c,y),inc=UI.opt.inc,end=fyEndText(y.fy);
-  let h='<h2>'+esc((c.name||'').toUpperCase())+'</h2><div class="c">'+esc(c.address||'')+(c.pan?' &nbsp;|&nbsp; PAN: '+esc(c.pan):'')+'</div>';
+  let h=titleHTML(c)+'<div class="c">'+esc(c.address||'')+(c.pan?' &nbsp;|&nbsp; PAN: '+esc(c.pan):'')+'</div>';
   if(inc!=='bs'){
     h+='<div class="c"><b>'+(c.hasTrading?'Trading and Profit &amp; Loss Account':'Profit &amp; Loss Account')+' for the year ended '+end+'</b></div>';
     if(S.trading)h+=teeHTML('Trading Account',S.trading);
@@ -329,7 +332,7 @@ function docHTML(c,y){
     h+='<div class="c" style="margin-top:22px"><b>Balance Sheet as at '+end+'</b></div>'+teeHTML('Balance Sheet',S.bs);
     S.tables.forEach(t=>h+=tblHTML(t));
   }
-  if(UI.opt.sig)h+='<div class="sig"><div>Place: '+esc(c.place||'')+'<br>Date: ____________</div><div style="text-align:right">For '+esc(c.name)+'<br><br><br>'+esc(c.signatory||'')+' ('+roleOf(c)+')</div></div>';
+  if(UI.opt.sig)h+='<div class="sig"><div>Place: '+esc(c.place||'')+'<br>Date: ____________</div><div style="text-align:right">For '+esc(dispName(c))+'<br><br><br>'+esc(c.signatory||'')+' ('+roleOf(c)+')</div></div>';
   return h;
 }
 
@@ -340,10 +343,20 @@ function buildPDF(c,y){
   if(typeof doc.autoTable!=='function')return null;
   const S=statements(c,y),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),mx=12,aw=W-2*mx,end=fyEndText(y.fy);
   const head=title=>{
-    doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20);doc.text((c.name||'').toUpperCase(),W/2,16,{align:'center'});
+    let dy=0;doc.setTextColor(20);
+    if(hasTrade(c)){
+      const t=String(c.trade).trim().toUpperCase(),lt='(Legal Name: '+c.name+')';
+      doc.setFont('helvetica','bold');doc.setFontSize(15);const tw=doc.getTextWidth(t);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);const lw=doc.getTextWidth(lt);
+      if(tw+lw+3<=aw){const x0=(W-(tw+lw+3))/2;
+        doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20);doc.text(t,x0,16);
+        doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90);doc.text(lt,x0+tw+3,16);}
+      else{doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20);const tl=doc.splitTextToSize(t,aw);doc.text(tl,W/2,16,{align:'center'});
+        dy=(tl.length-1)*6;doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90);doc.text(lt,W/2,20.5+dy,{align:'center'});dy+=4.5;}
+    }else{doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20);doc.text((c.name||'').toUpperCase(),W/2,16,{align:'center'});}
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90);
-    const a=doc.splitTextToSize((c.address||'')+(c.pan?'   |   PAN: '+c.pan:''),aw);doc.text(a,W/2,21.5,{align:'center'});
-    const yy=21.5+a.length*4;doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20);doc.text(title,W/2,yy+3,{align:'center'});return yy+8;};
+    const a=doc.splitTextToSize((c.address||'')+(c.pan?'   |   PAN: '+c.pan:''),aw);doc.text(a,W/2,21.5+dy,{align:'center'});
+    const yy=21.5+dy+a.length*4;doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20);doc.text(title,W/2,yy+3,{align:'center'});return yy+8;};
   const sub=(t,yy)=>{if(yy>H-45){doc.addPage();yy=18;}doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(40);doc.text(t,W/2,yy,{align:'center'});return yy+2.5;};
   const tee=(s,yy)=>{
     const body=s.rows.map(r=>[r.L?r.L.l:'',r.L?money(r.L.a):'',r.R?r.R.l:'',r.R?money(r.R.a):'']);body.push(['Total',money(s.tl),'Total',money(s.tr)]);
@@ -376,7 +389,7 @@ function buildPDF(c,y){
     if(cy>H-42){doc.addPage();cy=20;}
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(30);
     doc.text('Place: '+(c.place||''),mx,cy+6);doc.text('Date: ____________',mx,cy+12);
-    doc.text('For '+c.name,W-mx,cy+6,{align:'right'});doc.text((c.signatory?c.signatory+' ':'')+'('+roleOf(c)+')',W-mx,cy+24,{align:'right'});
+    doc.text('For '+dispName(c),W-mx,cy+6,{align:'right'});doc.text((c.signatory?c.signatory+' ':'')+'('+roleOf(c)+')',W-mx,cy+24,{align:'right'});
   }
   const n=doc.getNumberOfPages();
   for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(130);
@@ -457,12 +470,15 @@ function refresh(){
     totalLiab:inr(m.totalLiab),totalAssets:inr(m.totalAssets),capTotal:inr(m.capTotal),
     gpl:(m.gp<0?'Gross Loss':'Gross Profit'),npl:(m.np<0?'NET LOSS':'NET PROFIT'),
     result:money(m.gp+m.income-m.indirect),bankTotal:inr(m.bankTotal),
-    balmsg:m.balanced?'✓ Both sides tally':(y.bs.autoBalance?'Difference of Rs. '+inr(Math.abs(m.diff))+' shown as Suspense':'⚠ Difference Rs. '+inr(Math.abs(m.diff))+(m.diff>0?' (Assets higher)':' (Liabilities higher)'))};
+    expdep:money(m.indirect+m.dep),tradeDr:inr(m.tradeDr),tradeCr:inr(m.tradeCr),curAssets:inr(m.curAssets),
+    ratioMsg:(Math.abs((m.ratioSum||0)-100)<0.005)?'\u2713 Profit shares total 100%':'\u26a0 Profit shares total '+(Math.round((m.ratioSum||0)*100)/100)+'% \u2013 should be 100%'};
+  const ad=Math.abs(m.diff);M.balmsg=M.adjmsg=m.balanced?'\u2713 Both sides tally':(y.bs.autoBalance?'Difference of Rs. '+inr(ad)+' shown as Suspense':(m.diff>0?'\u26a0 Assets are Rs. '+inr(ad)+' higher \u2192 add Rs. '+inr(ad)+' to Liabilities, or reduce Assets':'\u26a0 Liabilities are Rs. '+inr(ad)+' higher \u2192 add Rs. '+inr(ad)+' to Assets, or reduce Liabilities'));
   m.fa.forEach((x,i)=>{M['dep'+i]=inr(x.dep);M['close'+i]=money(x.close);});
   m.partners.forEach((p,i)=>{M['pint'+i]=inr(p.int);M['pshare'+i]=money(p.share);M['pclose'+i]=money(p.close);});
   document.querySelectorAll('[data-out]').forEach(el=>{const k=el.dataset.out;if(k in M)el.textContent=M[k];});
   document.querySelectorAll('[data-box="np"]').forEach(el=>el.className='tot '+(m.np<0?'rd':'gr'));
-  document.querySelectorAll('[data-box="bal"]').forEach(el=>el.className='bar'+((m.balanced||y.bs.autoBalance)?'':' err'));
+  document.querySelectorAll('[data-box="bal"]').forEach(el=>el.classList.toggle('err',!(m.balanced||y.bs.autoBalance)));
+  document.querySelectorAll('[data-box="pl"]').forEach(el=>el.classList.toggle('err',m.np<0));
 }
 
 /* ================= CLIENTS ================= */
@@ -475,10 +491,10 @@ function viewClients(){
 }
 function renderRows(){
   const el=$('#rows');if(!el)return;const q=UI.q.trim().toLowerCase();
-  const L=DB.clients.filter(c=>(!UI.ft||c.type===UI.ft)&&(!q||c.name.toLowerCase().includes(q)||(c.pan||'').toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name));
+  const L=DB.clients.filter(c=>(!UI.ft||c.type===UI.ft)&&(!q||c.name.toLowerCase().includes(q)||(c.trade||'').toLowerCase().includes(q)||(c.pan||'').toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name));
   if(!L.length){el.innerHTML='<div class="empty">'+(DB.clients.length?'No clients match your search.':'No clients yet. Click <b>New Client</b> or <b>Import</b> to begin.')+'</div>';return;}
-  el.innerHTML='<table><tr><th>Client</th><th>PAN</th><th>Type</th><th>Business</th><th>Latest FY</th><th>Place</th><th></th></tr>'+L.map(c=>{const lf=latestFY(c);
-    return '<tr><td><b>'+esc(c.name)+'</b></td><td>'+esc(c.pan||'–')+'</td><td><span class="tag t1">'+esc(c.type)+'</span></td><td>'+(c.hasTrading?'Trading':'Services')+'</td><td>'+(lf?'FY '+lf:'–')+'</td><td>'+esc(c.place||'')+'</td>'+
+  el.innerHTML='<table><tr><th>Legal name / Trade name</th><th>PAN</th><th>Type</th><th>Business</th><th>Latest FY</th><th>Place</th><th></th></tr>'+L.map(c=>{const lf=latestFY(c);
+    return '<tr><td><b>'+esc(c.name)+'</b>'+(c.trade?'<div style="color:var(--mut);font-size:12px;margin-top:2px">Trade: '+esc(c.trade)+'</div>':'')+'</td><td>'+esc(c.pan||'–')+'</td><td><span class="tag t1">'+esc(c.type)+'</span></td><td>'+(c.hasTrading?'Trading':'Services')+'</td><td>'+(lf?'FY '+lf:'–')+'</td><td>'+esc(c.place||'')+'</td>'+
     '<td class="r" style="white-space:nowrap"><a class="lnk" data-act="openClient" data-a="'+c.id+'">Open</a><a class="lnk" data-act="editClient" data-a="'+c.id+'">Edit</a><a class="lnk d" data-act="delClient" data-a="'+c.id+'">Delete</a></td></tr>';}).join('')+'</table>';
 }
 
@@ -487,7 +503,8 @@ function viewForm(){
   const f=FORM,isNew=!f.id;
   return hdr(isNew?'New Client':'Edit Client','Basic details are saved against the client name',B('Cancel','cancelForm',null,'s')+B('Save Client','saveClient'))+
   '<div class="grid g2"><div class="card"><h3>Basic Details</h3>'+
-  '<div class="f"><label class="l">Client / Firm name *</label>'+tin('name',f.name,'e.g. Ravi Kumar Traders','f')+'</div>'+
+  '<div class="f"><label class="l">Legal name (client name) *</label>'+tin('name',f.name,'e.g. Ravi Kumar','f')+'</div>'+
+  '<div class="f"><label class="l">Trade name (business name)</label>'+tin('trade',f.trade,'e.g. Ravi Kumar Traders (optional)','f')+'<div class="hint">If filled, statements show the trade name in large type with the legal name beside it. If blank, the legal name is used.</div></div>'+
   '<div class="grid g2" style="margin-bottom:0"><div class="f"><label class="l">PAN</label>'+tin('pan',f.pan,'ABCPK1234F','f','data-up="1" maxlength="10"')+'</div>'+
   '<div class="f"><label class="l">Entity type</label><select class="in" data-t="t" data-bind="type" data-root="f">'+ENTITY.map(e=>'<option'+(f.type===e?' selected':'')+'>'+e+'</option>').join('')+'</select></div></div>'+
   '<div class="f"><label class="l">Address</label><textarea class="in" data-t="t" data-bind="address" data-root="f">'+esc(f.address)+'</textarea></div>'+
@@ -511,7 +528,7 @@ function viewOverview(){
     side='<div class="card"><h3>Carry-forward preview <small>FY '+lf+' → '+nx+'</small></h3>'+(c.hasTrading?r('Closing Stock → Opening Stock',inr(m.stock)):'')+r(m.kind==='co'?'Share Capital + Reserves':'Closing Capital',inr(m.capTotal))+r('Fixed Assets (closing WDV)',inr(m.faClose))+r('Loans',inr(num(y.bs.secured)+num(y.bs.unsecured)))+r('Debtors / Creditors',inr(num(y.bs.debtors))+' / '+inr(num(y.bs.creditors)))+r('Cash & Bank',inr(num(y.bs.cash)+m.bankTotal))+
       '<div class="bar'+(m.balanced||y.bs.autoBalance?'':' err')+'" style="margin:10px 0 0">'+(m.balanced?'✓ Balanced – safe to carry forward':y.bs.autoBalance?'Balanced via suspense':'⚠ Not balanced (diff Rs. '+inr(Math.abs(m.diff))+')')+'</div>'+
       (exists?'<div class="hint">FY '+nx+' already exists.</div>':'<div style="margin-top:12px">'+B('➜ Create FY '+nx,'createYear',nx)+'</div>')+'</div>';}
-  return hdr(c.name,esc(c.pan||'No PAN')+' &middot; '+esc(c.type)+' &middot; '+(c.hasTrading?'Trading':'Services')+(c.place?' &middot; '+esc(c.place):''),B('Edit Profile','editClient',c.id,'s')+B('＋ Add Financial Year','addYear'))+
+  return hdr(dispName(c),(c.trade?'Legal name: '+esc(c.name)+' &middot; ':'')+esc(c.pan||'No PAN')+' &middot; '+esc(c.type)+' &middot; '+(c.hasTrading?'Trading':'Services')+(c.place?' &middot; '+esc(c.place):''),B('Edit Profile','editClient',c.id,'s')+B('＋ Add Financial Year','addYear'))+
     '<div class="grid" style="grid-template-columns:2fr 1fr;align-items:start"><div><h3 style="margin:0 0 12px">Financial Years</h3>'+cards+'</div>'+side+'</div>';
 }
 
@@ -519,7 +536,7 @@ function viewOverview(){
 function entryHdr(title,step,btns){
   const c=curClient(),y=curYear(),yrs=Object.keys(c.years).sort().reverse();
   const names=['Profile','Trading & P&L','Balance Sheet','Preview & Export'],keys=['form','pl','bs','preview'],ai=keys.indexOf(step);
-  return hdr(title,esc(c.name)+' &middot; FY '+y.fy,'<select class="in" style="width:auto" data-chg="switchFy">'+yrs.map(f=>'<option'+(f===y.fy?' selected':'')+'>'+f+'</option>').join('')+'</select>'+btns)+
+  return hdr(title,esc(dispName(c))+(c.trade?' <span style="color:#9aa0c0">(Legal name: '+esc(c.name)+')</span>':'')+' &middot; FY '+y.fy,'<select class="in" style="width:auto" data-chg="switchFy">'+yrs.map(f=>'<option'+(f===y.fy?' selected':'')+'>'+f+'</option>').join('')+'</select>'+btns)+
    '<div class="steps">'+names.map((n,i)=>'<div class="st '+(i===ai?'a':i<ai?'d':'')+'" data-act="step" data-a="'+keys[i]+'">'+(i<ai?'✓ ':'')+(i+1)+' '+n+'</div>').join('')+'</div>';
 }
 
@@ -527,12 +544,13 @@ function entryHdr(title,step,btns){
 function viewPL(){
   const c=curClient(),y=curYear(),t=y.trading,hasT=!!c.hasTrading;
   const trading='<div class="card"><h3>Trading Account</h3>'+rowN('Opening Stock','trading.openStock',t.openStock)+rowN('Purchases','trading.purchases',t.purchases)+rowN('Sales','trading.sales',t.sales)+rowN('Closing Stock','trading.closingStock',t.closingStock)+
-    '<div class="sub">Direct expenses</div>'+listRows('trading.direct',t.direct,'Expense name')+'<div class="tot" data-box="np-x"><span data-out="gpl">Gross Profit</span><span data-out="gp"></span></div></div>';
+    '<div class="sub">Direct expenses</div>'+listRows('trading.direct',t.direct,'Expense name')+'<div class="hint">Direct expenses total: Rs. <b data-out="direct"></b></div><div class="tot"><span>Total Debit (Opening + Purchases + Direct)</span><span data-out="tradeDr"></span></div><div class="tot"><span>Total Credit (Sales + Closing Stock)</span><span data-out="tradeCr"></span></div><div class="tot" data-box="np-x"><span data-out="gpl">Gross Profit</span><span data-out="gp"></span></div></div>';
   const income='<div class="card"><h3>'+(hasT?'Other Income':'Income / Receipts')+'</h3>'+listRows('pl.income',y.pl.income,'Income name')+'<div class="tot"><span>Total Income</span><span data-out="income"></span></div>'+(hasT?'':'<div class="hint">No trading account for this client – Purchases, Sales and Stock are ignored.</div>')+'</div>';
   const indirect='<div class="card"><h3>Indirect Expenses</h3>'+listRows('pl.indirect',y.pl.indirect,'Expense name')+'<div class="row" style="margin-top:8px"><div class="lab">Depreciation <small style="color:var(--mut)">(auto)</small></div>'+out('dep')+'</div><div class="tot"><span>Total Indirect</span><span data-out="indirect"></span></div></div>';
   const result='<div class="card"><h3>Result</h3>'+(hasT?'<div class="tot"><span>Gross Profit/(Loss) b/d</span><span data-out="gp"></span></div><div class="tot"><span>+ Other Income − Indirect Exp. − Depreciation</span><span data-out="result"></span></div>':'<div class="tot"><span>Income</span><span data-out="income"></span></div><div class="tot"><span>− Expenses &amp; Depreciation</span><span>(<span data-out="indirect"></span> + <span data-out="dep"></span>)</span></div>')+
     '<div class="tot gr" data-box="np" style="font-size:16px"><span data-out="npl">NET PROFIT</span><span data-out="np"></span></div><div class="hint">Flows to '+({prop:'Capital Account',firm:'Partners’ Capital (via Appropriation)',co:'Reserves & Surplus'}[kindOf(c)])+' automatically.</div></div>';
-  return entryHdr('Trading & P&L Account','pl',B('Next →','step','bs'))+'<div class="grid g3" style="align-items:start">'+(hasT?trading+indirect+'<div>'+income+result+'</div>':income+indirect+result)+'</div>';
+  const live='<div class="bar sticky" data-box="pl"><span>'+(hasT?'Gross Profit/(Loss): Rs. <b data-out="gp"></b>':'Income: Rs. <b data-out="income"></b>')+'</span>'+(hasT?'<span>Other income: Rs. <b data-out="income"></b></span>':'')+'<span>Expenses + Depreciation: Rs. <b data-out="expdep"></b></span><span class="sp"><b data-out="npl"></b>: Rs. <b data-out="np"></b></span></div>';
+  return entryHdr('Trading & P&L Account','pl',B('Next →','step','bs'))+live+'<div class="grid g3" style="align-items:start">'+(hasT?trading+indirect+'<div>'+income+result+'</div>':income+indirect+result)+'</div>';
 }
 
 /* ================= BALANCE SHEET ================= */
@@ -543,9 +561,9 @@ function viewBS(){
   else if(kind==='co')cap=rowN('Share Capital','bs.shareCapital',b.shareCapital)+rowN('Reserves & Surplus – Opening','bs.openSurplus',b.openSurplus)+rowO('Add/(Less): Net Profit/(Loss)','np')+rowN('Less: Dividend','bs.dividend',b.dividend);
   else cap='<div class="row"><div class="lab">Partners’ capital (see table below)</div>'+out('capTotal')+'</div>';
   const liab='<div class="card"><h3>Capital &amp; Liabilities</h3>'+cap+rowN('Secured Loans','bs.secured',b.secured)+rowN('Unsecured Loans','bs.unsecured',b.unsecured)+rowN('Sundry Creditors','bs.creditors',b.creditors)+rowN('Duties & Taxes','bs.taxes',b.taxes)+
-    '<div class="sub">Other liabilities</div>'+listRows('bs.otherLiab',b.otherLiab,'Liability name')+'</div>';
+    '<div class="sub">Other liabilities</div>'+listRows('bs.otherLiab',b.otherLiab,'Liability name')+'<div class="tot"><span>Total Capital &amp; Liabilities</span><span data-out="totalLiab"></span></div></div>';
   const ast='<div class="card"><h3>Current Assets</h3>'+(hasT?'<div class="row"><div class="lab">Closing Stock (from Trading)</div>'+nin('trading.closingStock',y.trading.closingStock)+'</div>':'')+rowN('Sundry Debtors','bs.debtors',b.debtors)+rowN('Cash in Hand','bs.cash',b.cash)+
-    '<div class="sub">Bank balances</div>'+listRows('bs.banks',b.banks,'Bank name')+rowN('Loans & Advances','bs.advances',b.advances)+'<div class="sub">Other assets / deposits</div>'+listRows('bs.otherAssets',b.otherAssets,'Asset name')+'</div>';
+    '<div class="sub">Bank balances</div>'+listRows('bs.banks',b.banks,'Bank name')+rowN('Loans & Advances','bs.advances',b.advances)+'<div class="sub">Other assets / deposits</div>'+listRows('bs.otherAssets',b.otherAssets,'Asset name')+'<div class="tot"><span>Total Current Assets</span><span data-out="curAssets"></span></div><div class="tot"><span>+ Fixed Assets (WDV)</span><span data-out="faClose"></span></div><div class="tot"><span>Total Assets</span><span data-out="totalAssets"></span></div></div>';
   const fa='<div class="card"><h3>Fixed Assets <small>Depreciation (WDV) flows to the P&amp;L</small></h3><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Asset block</th><th class="r">Rate %</th><th class="r">Opening WDV</th><th class="r">Add ≥180 days</th><th class="r">Add &lt;180 days</th><th class="r">Sale / Deletion</th><th class="r">Depreciation</th><th class="r">Closing WDV</th><th></th></tr>'+
     b.assets.map((a,i)=>'<tr><td style="min-width:150px">'+tin('bs.assets.'+i+'.n',a.n,'Asset name')+'</td><td style="width:70px">'+din('bs.assets.'+i+'.rate',a.rate)+'</td><td>'+nin('bs.assets.'+i+'.open',a.open)+'</td><td>'+nin('bs.assets.'+i+'.addFull',a.addFull)+'</td><td>'+nin('bs.assets.'+i+'.addHalf',a.addHalf)+'</td><td>'+nin('bs.assets.'+i+'.disposal',a.disposal)+'</td><td>'+out('dep'+i)+'</td><td>'+out('close'+i)+'</td><td><button class="x" data-act="delRow" data-a="bs.assets.'+i+'">×</button></td></tr>').join('')+
     '</table></div><span class="add" data-act="addRow" data-a="bs.assets">＋ Add asset block</span><div class="tot"><span>Closing WDV (to Balance Sheet)</span><span data-out="faClose"></span></div><div class="hint">Additions used for 180 days or more get full-year depreciation; those used for less get half the rate.</div></div>';
@@ -553,9 +571,9 @@ function viewBS(){
   if(kind==='firm'){
     pt='<div class="card"><h3>Partners’ Capital Accounts <small>Interest and remuneration are appropriations, not P&amp;L expenses</small></h3><div class="f" style="max-width:240px"><label class="l">Interest on capital (% p.a.)</label>'+din('bs.interestRate',b.interestRate)+'</div><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Partner</th><th class="r">Profit share %</th><th class="r">Opening capital</th><th class="r">Interest</th><th class="r">Remuneration</th><th class="r">Share of profit</th><th class="r">Drawings</th><th class="r">Closing capital</th><th></th></tr>'+
       b.partners.map((p,i)=>'<tr><td style="min-width:140px">'+tin('bs.partners.'+i+'.name',p.name,'Partner '+(i+1))+'</td><td style="width:80px">'+din('bs.partners.'+i+'.ratio',p.ratio)+'</td><td>'+nin('bs.partners.'+i+'.openCapital',p.openCapital)+'</td><td>'+out('pint'+i)+'</td><td>'+nin('bs.partners.'+i+'.remuneration',p.remuneration)+'</td><td>'+out('pshare'+i)+'</td><td>'+nin('bs.partners.'+i+'.drawings',p.drawings)+'</td><td>'+out('pclose'+i)+'</td><td><button class="x" data-act="delRow" data-a="bs.partners.'+i+'">×</button></td></tr>').join('')+
-      '</table></div><span class="add" data-act="addRow" data-a="bs.partners">＋ Add partner</span></div>';
+      '</table></div><span class="add" data-act="addRow" data-a="bs.partners">＋ Add partner</span><div class="hint" style="font-weight:600" data-out="ratioMsg"></div></div>';
   }
-  const bar='<div class="bar" data-box="bal"><span>Total Liabilities: Rs. <span data-out="totalLiab"></span></span><span>Total Assets: Rs. <span data-out="totalAssets"></span></span><span data-out="balmsg"></span><span class="sp"><label class="sw" style="font-weight:500"><input type="checkbox" class="chk" data-t="b" data-bind="bs.autoBalance" data-rerender="1"'+(b.autoBalance?' checked':'')+'><span class="tg"></span>Show difference as Suspense</label></span></div>';
+  const bar='<div class="bar sticky" data-box="bal"><span>Liabilities: Rs. <b data-out="totalLiab"></b></span><span>Assets: Rs. <b data-out="totalAssets"></b></span><span data-out="adjmsg"></span><span class="sp"><label class="sw" style="font-weight:500"><input type="checkbox" class="chk" data-t="b" data-bind="bs.autoBalance" data-rerender="1"'+(b.autoBalance?' checked':'')+'><span class="tg"></span>Show difference as Suspense</label></span></div>';
   return entryHdr('Balance Sheet','bs',B('← Back','step','pl','s')+B('Next →','step','preview'))+bar+'<div class="grid g2" style="align-items:start">'+liab+ast+'</div>'+fa+pt;
 }
 
@@ -580,7 +598,7 @@ function viewSettings(){
 }
 
 /* ================= ACTIONS ================= */
-const blankForm=()=>({id:null,name:'',pan:'',type:'Proprietorship',address:'',signatory:'',place:'',hasTrading:true,fy:defaultFY()});
+const blankForm=()=>({id:null,name:'',trade:'',pan:'',type:'Proprietorship',address:'',signatory:'',place:'',hasTrading:true,fy:defaultFY()});
 function newYear(c,fy){
   const p=c.years[prevFY(fy)];const y=p?carry(c,p,fy):blankYear(fy,c);c.years[fy]=y;save();return y;
 }
@@ -591,15 +609,15 @@ const A={
   editClient(id,_a,_b,fromYear){const c=DB.clients.find(x=>x.id===id);if(!c)return;FORM=JSON.parse(JSON.stringify(c));delete FORM.years;UI.cid=id;UI.ret=fromYear?'pl':null;go('form');},
   cancelForm(){FORM=null;go(UI.ret||(UI.cid&&curClient()?'overview':'clients'));UI.ret=null;},
   saveClient(){
-    const f=FORM;f.name=(f.name||'').trim();
+    const f=FORM;f.name=(f.name||'').trim();f.trade=(f.trade||'').trim();
     if(!f.name){toast('Client name is required',1);return;}
     if(DB.clients.some(c=>c.id!==f.id&&c.name.trim().toLowerCase()===f.name.toLowerCase())){toast('A client with this name already exists',1);return;}
     f.pan=(f.pan||'').trim().toUpperCase();
     if(f.pan&&!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(f.pan)&&!confirm('PAN "'+f.pan+'" does not look like a valid PAN (e.g. ABCPK1234F). Save anyway?'))return;
-    if(f.id){const c=DB.clients.find(x=>x.id===f.id);const wasT=c.hasTrading,wasK=kindOf(c);Object.assign(c,{name:f.name,pan:f.pan,type:f.type,address:f.address,signatory:f.signatory,place:f.place,hasTrading:f.hasTrading});
+    if(f.id){const c=DB.clients.find(x=>x.id===f.id);const wasT=c.hasTrading,wasK=kindOf(c);Object.assign(c,{name:f.name,trade:f.trade,pan:f.pan,type:f.type,address:f.address,signatory:f.signatory,place:f.place,hasTrading:f.hasTrading});
       if(kindOf(c)==='firm'&&wasK!=='firm')Object.values(c.years).forEach(y=>{if(!y.bs.partners.length)y.bs.partners=blankYear(y.fy,c).bs.partners;});
       save();toast('Client updated');const r=UI.ret;FORM=null;UI.ret=null;go(r||'overview');}
-    else{const c={id:uid(),name:f.name,pan:f.pan,type:f.type,address:f.address,signatory:f.signatory,place:f.place,hasTrading:f.hasTrading,years:{},created:Date.now()};
+    else{const c={id:uid(),name:f.name,trade:f.trade,pan:f.pan,type:f.type,address:f.address,signatory:f.signatory,place:f.place,hasTrading:f.hasTrading,years:{},created:Date.now()};
       c.years[f.fy]=blankYear(f.fy,c);DB.clients.push(c);save();UI.cid=c.id;UI.fy=f.fy;FORM=null;toast('Client created');go('pl');}
   },
   delClient(id){const c=DB.clients.find(x=>x.id===id);if(!c)return;if(!confirm('Delete "'+c.name+'" and ALL its financial years? This cannot be undone.'))return;DB.clients=DB.clients.filter(x=>x.id!==id);if(UI.cid===id){UI.cid=null;UI.fy=null;}save();render();toast('Client deleted');},
@@ -667,9 +685,9 @@ async function impRead(file){
 }
 const typeNorm=s=>{s=String(s||'').toLowerCase();return /llp/.test(s)?'LLP':/partner|firm/.test(s)?'Partnership':/comp|pvt|private|ltd|limited/.test(s)?'Company':'Proprietorship';};
 const yes=(s,d)=>{s=String(s||'').trim().toLowerCase();if(!s)return d;return /^(y|yes|true|1|trading)/.test(s);};
-function findClient(name,pan){const n=(name||'').trim().toLowerCase(),p=(pan||'').trim().toUpperCase();return DB.clients.find(c=>(p&&c.pan&&c.pan.toUpperCase()===p)||(n&&c.name.trim().toLowerCase()===n));}
+function findClient(name,pan){const n=(name||'').trim().toLowerCase(),p=(pan||'').trim().toUpperCase();return DB.clients.find(c=>(p&&c.pan&&c.pan.toUpperCase()===p)||(n&&(c.name.trim().toLowerCase()===n||(c.trade||'').trim().toLowerCase()===n)));}
 function parseClientRow(o){
-  const r={name:pick(o,['name','clientname','firmname','client','businessname']),pan:pick(o,['pan','panno','pannumber']).toUpperCase(),
+  const r={name:pick(o,['legalname','name','clientname','firmname','client']),trade:pick(o,['tradename','businessname','tradingas']),pan:pick(o,['pan','panno','pannumber']).toUpperCase(),
     type:typeNorm(pick(o,['entitytype','type','constitution','entity'])),address:pick(o,['address']),signatory:pick(o,['signatory','proprietor','authorisedsignatory','authorizedsignatory','partner','director']),
     place:pick(o,['place','city']),hasTrading:yes(pick(o,['hastradingyesno','hastrading','trading','tradingaccount','maintaintradingaccount']),true),fy:normFY(pick(o,['firstfy','fy','financialyear','year']))||defaultFY(),
     openCapital:num(pick(o,['openingcapital','capital'])),openStock:num(pick(o,['openingstock','stock']))};
@@ -722,10 +740,10 @@ function impApply(){
   if(IMP.tab==='clients'){
     const upd=$('#impupd')&&$('#impupd').checked;let n=0,u=0;
     IMP.rows.forEach(r=>{
-      if(r.status==='new'){const c={id:uid(),name:r.name,pan:r.pan,type:r.type,address:r.address,signatory:r.signatory,place:r.place,hasTrading:r.hasTrading,years:{},created:Date.now()};
+      if(r.status==='new'){const c={id:uid(),name:r.name,trade:r.trade||'',pan:r.pan,type:r.type,address:r.address,signatory:r.signatory,place:r.place,hasTrading:r.hasTrading,years:{},created:Date.now()};
         const y=blankYear(r.fy,c);if(r.openStock&&c.hasTrading)y.trading.openStock=r.openStock;if(r.openCapital){if(kindOf(c)==='prop')y.bs.openCapital=r.openCapital;else if(kindOf(c)==='co')y.bs.shareCapital=r.openCapital;}
         c.years[r.fy]=y;DB.clients.push(c);n++;}
-      else if(r.status==='dup'&&upd){const c=findClient(r.name,r.pan);if(c){['address','signatory','place'].forEach(k=>{if(r[k])c[k]=r[k];});if(r.pan&&!c.pan)c.pan=r.pan;c.type=r.type;u++;}}});
+      else if(r.status==='dup'&&upd){const c=findClient(r.name,r.pan);if(c){['address','signatory','place','trade'].forEach(k=>{if(r[k])c[k]=r[k];});if(r.pan&&!c.pan)c.pan=r.pan;c.type=r.type;u++;}}});
     msg=n+' client(s) added'+(u?', '+u+' updated':'');
   }else if(IMP.tab==='figures'){
     let n=0;IMP.rows.forEach(r=>{if(r.status==='new'){applyFig(r);n++;}});msg=n+' figure(s) imported';
@@ -739,13 +757,13 @@ function impApply(){
   save();closeModal();UI.view='clients';render();toast(msg);
 }
 function downloadTemplate(kind){
-  if(kind==='clients')download('KRN_Clients_Template.csv','Name,PAN,Entity Type,Address,Signatory,Place,Has Trading (Yes/No),First FY,Opening Capital,Opening Stock\r\nSample Traders,ABCPK1234F,Proprietorship,"1, Sample Street, Chennai",Sample Owner,Chennai,Yes,2025-26,600000,250000\r\nSample Consultants LLP,AABFS9087L,LLP,"2, Demo Road, Chennai",Sample Partner,Chennai,No,2025-26,,\r\n','text/csv');
+  if(kind==='clients')download('KRN_Clients_Template.csv','Legal Name,Trade Name,PAN,Entity Type,Address,Signatory,Place,Has Trading (Yes/No),First FY,Opening Capital,Opening Stock\r\nSample Owner,Sample Traders,ABCPK1234F,Proprietorship,"1, Sample Street, Chennai",Sample Owner,Chennai,Yes,2025-26,600000,250000\r\nSample Consultants LLP,,AABFS9087L,LLP,"2, Demo Road, Chennai",Sample Partner,Chennai,No,2025-26,,\r\n','text/csv');
   else download('KRN_Figures_Template.csv','Client,FY,Section,Item,Amount,Rate\r\nSample Traders,2025-26,Trading,Opening Stock,250000,\r\nSample Traders,2025-26,Trading,Purchases,1800000,\r\nSample Traders,2025-26,Trading,Sales,2450000,\r\nSample Traders,2025-26,Trading,Closing Stock,300000,\r\nSample Traders,2025-26,Direct Expense,Wages,40000,\r\nSample Traders,2025-26,Indirect Expense,Rent,90000,\r\nSample Traders,2025-26,Income,Interest Received,10000,\r\nSample Traders,2025-26,Capital,Opening Capital,600000,\r\nSample Traders,2025-26,Capital,Drawings,120000,\r\nSample Traders,2025-26,Liability,Sundry Creditors,150000,\r\nSample Traders,2025-26,Asset,Sundry Debtors,220000,\r\nSample Traders,2025-26,Asset,Bank - HDFC,130000,\r\nSample Traders,2025-26,Fixed Asset,Furniture & Fixtures,150000,10\r\n','text/csv');
 }
 function renderImport(){
   const T=IMP.tab,tabs=[['clients','Clients (Excel / CSV)'],['figures','Financial figures (Excel / CSV)'],['backup','Backup / Restore']];
   let body='';
-  if(T==='clients')body='<p class="hint">Upload a sheet with columns: <b>Name, PAN, Entity Type, Address, Signatory, Place, Has Trading (Yes/No), First FY, Opening Capital, Opening Stock</b>. Only Name is mandatory. Existing clients (same PAN or name) are skipped.</p><button class="btn s sm" data-act="impTemplate" data-a="clients">⬇ Download template</button>';
+  if(T==='clients')body='<p class="hint">Upload a sheet with columns: <b>Legal Name, Trade Name, PAN, Entity Type, Address, Signatory, Place, Has Trading (Yes/No), First FY, Opening Capital, Opening Stock</b>. Only Legal Name is mandatory; Trade Name is optional. Existing clients (same PAN or name) are skipped.</p><button class="btn s sm" data-act="impTemplate" data-a="clients">⬇ Download template</button>';
   else if(T==='figures')body='<p class="hint">Bulk-load year figures. Columns: <b>Client, FY, Section, Item, Amount, Rate</b>. Sections: Trading, Direct Expense, Indirect Expense, Income, Capital, Liability, Asset, Fixed Asset (Amount = opening WDV, Rate = depreciation %). The client must already exist; a missing FY is created.</p><button class="btn s sm" data-act="impTemplate" data-a="figures">⬇ Download template</button>';
   else body='<p class="hint">Restore a backup file created with the Backup button, or download a fresh backup now.</p><button class="btn s sm" data-act="backup">⬇ Download backup now</button>';
   body+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept="'+(T==='backup'?'.json,application/json':'.csv,.xlsx,.xls')+'"></div>';
@@ -753,7 +771,7 @@ function renderImport(){
   let canApply=false;
   if(IMP.rows){
     if(T==='clients'){seenDup(IMP.rows);const nw=IMP.rows.filter(r=>r.status==='new').length;canApply=nw>0||IMP.rows.some(r=>r.status==='dup');
-      body+='<div class="hint"><b>'+nw+'</b> new &middot; '+IMP.rows.filter(r=>r.status==='dup').length+' existing &middot; '+IMP.rows.filter(r=>r.status==='bad').length+' invalid</div><div class="scroll"><table><tr><th>Name</th><th>PAN</th><th>Type</th><th>Trading</th><th>FY</th><th>Status</th></tr>'+IMP.rows.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+esc(r.pan)+'</td><td>'+esc(r.type||'')+'</td><td>'+(r.name?(r.hasTrading?'Yes':'No'):'')+'</td><td>'+esc(r.fy||'')+'</td><td><span class="tag '+({new:'t2',dup:'t3',bad:'t5'}[r.status])+'">'+({new:'New',dup:'Skip',bad:'Invalid'}[r.status])+'</span> <small>'+esc(r.note||'')+'</small></td></tr>').join('')+'</table></div><label class="sw" style="margin-top:10px"><input type="checkbox" class="chk" id="impupd"><span class="tg"></span>Update address / signatory / place of existing clients</label>';}
+      body+='<div class="hint"><b>'+nw+'</b> new &middot; '+IMP.rows.filter(r=>r.status==='dup').length+' existing &middot; '+IMP.rows.filter(r=>r.status==='bad').length+' invalid</div><div class="scroll"><table><tr><th>Legal name</th><th>Trade name</th><th>PAN</th><th>Type</th><th>Trading</th><th>FY</th><th>Status</th></tr>'+IMP.rows.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+esc(r.trade||'')+'</td><td>'+esc(r.pan)+'</td><td>'+esc(r.type||'')+'</td><td>'+(r.name?(r.hasTrading?'Yes':'No'):'')+'</td><td>'+esc(r.fy||'')+'</td><td><span class="tag '+({new:'t2',dup:'t3',bad:'t5'}[r.status])+'">'+({new:'New',dup:'Skip',bad:'Invalid'}[r.status])+'</span> <small>'+esc(r.note||'')+'</small></td></tr>').join('')+'</table></div><label class="sw" style="margin-top:10px"><input type="checkbox" class="chk" id="impupd"><span class="tg"></span>Update address / signatory / place of existing clients</label>';}
     else if(T==='figures'){const ok=IMP.rows.filter(r=>r.status==='new').length;canApply=ok>0;
       body+='<div class="hint"><b>'+ok+'</b> valid &middot; '+(IMP.rows.length-ok)+' invalid (skipped)</div><div class="scroll"><table><tr><th>Client</th><th>FY</th><th>Section</th><th>Item</th><th class="r">Amount</th><th>Status</th></tr>'+IMP.rows.map(r=>'<tr><td>'+esc(r.client)+'</td><td>'+esc(r.fy)+'</td><td>'+esc(r.section)+'</td><td>'+esc(r.item)+'</td><td class="r">'+inr(r.amount)+'</td><td><span class="tag '+(r.status==='new'?'t2':'t5')+'">'+(r.status==='new'?'OK':'Skip')+'</span> <small>'+esc(r.note||'')+'</small></td></tr>').join('')+'</table></div>';}
     else{canApply=true;const ny=IMP.rows.reduce((s,c)=>s+Object.keys(c.years||{}).length,0);
