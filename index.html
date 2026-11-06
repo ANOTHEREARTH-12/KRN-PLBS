@@ -108,6 +108,13 @@ a.lnk{color:var(--pri);font-weight:600;cursor:pointer;margin-right:10px}a.lnk.d{
 .lkfoot{text-align:center;font-size:12px;color:#aab0f0;margin-top:18px}
 @media (max-width:1000px){.g3,.g4{grid-template-columns:1fr 1fr}}
 @media (max-width:760px){.app{display:block}.side{position:static;width:auto;height:auto;flex-direction:row;flex-wrap:wrap;padding:10px}.side .sl,.side .user{display:none}.logo{margin:4px 10px}.main{padding:16px}.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.pvon .row{grid-template-columns:1fr 120px 104px}.pvon .row2{grid-template-columns:1fr 120px 104px 26px}
+.pv{text-align:right;color:#9a6a00;background:#fff4dc;border-radius:8px;padding:8px 9px;font-size:12.5px;white-space:nowrap}.pv.e{background:transparent}
+.pv2{font-size:10.5px;color:#9a6a00;text-align:right;margin-top:2px;white-space:nowrap}
+.pvlegend+.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.pvon .tot{align-items:center}.pvt{align-self:center;white-space:nowrap;padding:4px 8px;color:#9a6a00;background:#fff4dc;border-radius:8px;padding:0 8px;font-weight:600}
+.pvlegend{font-size:12px;color:var(--mut);margin:0 0 10px}
+.ghost .gname{color:#9a6a00;padding:8px 10px;border:1px dashed #e8c98a;border-radius:10px;font-size:13px}.ghost .gname small{opacity:.7;font-size:10px;margin-left:4px}.ghost .gz{text-align:right;color:#b8bbd3;padding-right:12px}.ghost .gx{color:#9a6a00}
 </style></head>
 <body>
 <div class="app"><aside class="side" id="side"></aside><main class="main" id="main"></main></div>
@@ -497,9 +504,52 @@ function render(){
   $('#side').innerHTML=sideHTML();
   const v={clients:viewClients,form:viewForm,overview:viewOverview,pl:viewPL,bs:viewBS,preview:viewPreview,settings:viewSettings}[UI.view];
   $('#main').innerHTML=v();
-  if(['pl','bs'].includes(UI.view))refresh();
+  if(['pl','bs'].includes(UI.view)){refresh();decoratePrev();}
   if(UI.view==='preview')refreshPreview();
   if(UI.view==='clients')renderRows();
+}
+
+/* ---- last-FY reference column (entry screens only; never affects PDF) ---- */
+function decoratePrev(){
+  const c=curClient(),y=curYear();if(!c||!y)return;
+  const py=c.years[prevFY(y.fy)];if(!py)return;
+  const main=$('#main'),m0=compute(c,py),kind=kindOf(c),pb=py.bs;
+  main.classList.add('pvon');
+  const fm=v=>v?money(v):'–',ch=(t,cls)=>{const d=document.createElement('div');d.className='pv'+(cls?' '+cls:'');d.textContent=t;return d;};
+  const nm=s=>String(s||'').trim().toLowerCase();
+  const OUT={gp:m0.gp,np:m0.np,indirect:m0.indirect,income:m0.income,dep:m0.dep,direct:m0.direct,faClose:m0.faClose,totalLiab:m0.totalLiab,totalAssets:m0.totalAssets,capTotal:m0.capTotal,result:m0.gp+m0.income-m0.indirect,bankTotal:m0.bankTotal,expdep:m0.indirect+m0.dep,tradeDr:m0.tradeDr,tradeCr:m0.tradeCr,curAssets:m0.curAssets,npl:m0.np,gpl:m0.gp,debtorsT:m0.debtors,creditorsT:m0.creditors,loansT:m0.unsecured};
+  const EFF={'bs.openCapital':kind==='prop'?m0.capClose:undefined,'bs.openSurplus':m0.surplusClose,'bs.debtors':m0.debtors,'bs.creditors':m0.creditors,'bs.unsecured':m0.unsecured};
+  const lists=['trading.direct','pl.income','pl.indirect','bs.otherLiab','bs.banks','bs.otherAssets','bs.debtorList','bs.creditorList','bs.loanList'];
+  const prevOf=(path)=>{
+    if(path in EFF)return EFF[path];
+    const mm=path.match(/^(.*)\.(\d+)\.v$/);
+    if(mm&&lists.includes(mm[1])){const cur=getPath(y,mm[1])[+mm[2]],pl=getPath(py,mm[1])||[];if(!cur||!nm(cur.n))return undefined;const f=pl.find(r=>nm(r.n)===nm(cur.n));return f?num(f.v):0;}
+    if(/^bs\.assets\.\d+\.open$/.test(path)){const i=+path.split('.')[2],cur=y.bs.assets[i],f=(py.bs.assets||[]).findIndex(a=>nm(a.n)===nm(cur&&cur.n));return f>=0&&m0.fa[f]?m0.fa[f].close:undefined;}
+    if(/^bs\.partners\.\d+\.openCapital$/.test(path)){const i=+path.split('.')[2],cur=y.bs.partners[i],f=m0.partners.findIndex(p=>nm(p.name)===nm(cur&&cur.name));return f>=0?m0.partners[f].close:undefined;}
+    if(/\.n$|\.name$|\.rate$|\.ratio$|\.addFull$|\.addHalf$|\.disposal$|\.remuneration$|\.intro$|\.drawings$/.test(path)&&/^bs\.(assets|partners)/.test(path)){
+      const mm2=path.match(/^bs\.(assets|partners)\.\d+\.(\w+)$/);return undefined;}
+    const v=getPath(py,path);return typeof v==='number'?num(v):undefined;
+  };
+  /* simple rows and list rows */
+  main.querySelectorAll('.row>input[data-bind][data-t="n"],.row2>input[data-bind][data-t="n"]').forEach(el=>{
+    const v=prevOf(el.dataset.bind);el.insertAdjacentElement('afterend',ch(v===undefined?'':fm(v),v===undefined?'e':''));});
+  main.querySelectorAll('.row>[data-out]').forEach(el=>{const k=el.dataset.out;el.insertAdjacentElement('afterend',ch(k in OUT?money(OUT[k]):'',k in OUT?'':'e'));});
+  /* totals */
+  main.querySelectorAll('.tot').forEach(t=>{const o=t.querySelector(':scope>[data-out]');const k=o&&o.dataset.out;if(k&&k in OUT){const s=document.createElement('span');s.className='pvt';s.textContent=money(OUT[k]);t.appendChild(s);}});
+  /* tables: last-year closing under opening fields */
+  main.querySelectorAll('.tbl-in input[data-bind$=".open"],.tbl-in input[data-bind$=".openCapital"]').forEach(el=>{
+    const v=prevOf(el.dataset.bind);if(v!==undefined){const d=document.createElement('div');d.className='pv2';d.textContent='Last FY close: '+fm(v);el.insertAdjacentElement('afterend',d);}});
+  /* last-year-only heads as ghost rows */
+  lists.forEach(path=>{
+    const add=main.querySelector('.add[data-a="'+path+'"]');if(!add)return;
+    const cur=(getPath(y,path)||[]).map(r=>nm(r.n));
+    (getPath(py,path)||[]).forEach(r=>{if(!nm(r.n)||!num(r.v)||cur.includes(nm(r.n)))return;
+      const g=document.createElement('div');g.className='row2 ghost';
+      g.innerHTML='<div class="gname">'+esc(r.n)+' <small>last FY only</small></div><div class="gz">–</div><div class="pv">'+fm(num(r.v))+'</div><button class="x gx" title="Add this head to this year" data-act="addGhost" data-a="'+esc(path+'|'+r.n)+'">+</button>';
+      add.parentNode.insertBefore(g,add);});});
+  /* legend */
+  const grid=main.querySelector('.grid');
+  if(grid){const l=document.createElement('div');l.className='pvlegend';l.innerHTML='<span class="pv" style="display:inline-block;padding:2px 10px">Amber</span> = FY '+esc(py.fy)+' (last year) – for reference only, not part of this year’s figures';grid.parentNode.insertBefore(l,grid);}
 }
 function go(view){UI.view=view;render();window.scrollTo(0,0);}
 
@@ -703,6 +753,7 @@ const A={
   addRow(path){const y=curYear(),arr=getPath(y,path),k=path.split('.').pop();
     arr.push(k==='assets'?asset('',10):k==='partners'?{name:'',ratio:0,openCapital:0,drawings:0,remuneration:0,intro:0}:{n:'',v:0});
     render();const el=$('[data-bind="'+path+'.'+(arr.length-1)+'.'+(k==='partners'?'name':'n')+'"]');if(el)el.focus();},
+  addGhost(x){const i=x.indexOf('|'),path=x.slice(0,i),n=x.slice(i+1),y=curYear();getPath(y,path).push({n,v:0});save();render();const arr=getPath(y,path),el=$('[data-bind="'+path+'.'+(arr.length-1)+'.v"]');if(el)el.focus();},
   delRow(path){const y=curYear(),p=path.split('.'),i=+p.pop(),arr=getPath(y,p.join('.'));arr.splice(i,1);save();render();},
   switchFy(fy){UI.fy=fy;render();},
   ftype(v){UI.ft=v;renderRows();},
