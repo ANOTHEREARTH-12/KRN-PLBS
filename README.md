@@ -14,6 +14,7 @@ A single-file web app (`index.html`) for KRN Tax Consultancy to prepare Trading,
 - Password lock on opening (set on first use; change it under Settings → Security)
 - Export to PDF (horizontal T-format with schedules and signature block)
 - Import clients and year figures from Excel / CSV; backup and restore as JSON
+- Ledger import: fill the Excel template (Date, Particulars, Debit, Credit, Type, Category) and the portal builds the Trading / P&L for the chosen client and FY
 
 ## Run locally
 

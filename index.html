@@ -550,7 +550,7 @@ function viewPL(){
   const result='<div class="card"><h3>Result</h3>'+(hasT?'<div class="tot"><span>Gross Profit/(Loss) b/d</span><span data-out="gp"></span></div><div class="tot"><span>+ Other Income − Indirect Exp. − Depreciation</span><span data-out="result"></span></div>':'<div class="tot"><span>Income</span><span data-out="income"></span></div><div class="tot"><span>− Expenses &amp; Depreciation</span><span>(<span data-out="indirect"></span> + <span data-out="dep"></span>)</span></div>')+
     '<div class="tot gr" data-box="np" style="font-size:16px"><span data-out="npl">NET PROFIT</span><span data-out="np"></span></div><div class="hint">Flows to '+({prop:'Capital Account',firm:'Partners’ Capital (via Appropriation)',co:'Reserves & Surplus'}[kindOf(c)])+' automatically.</div></div>';
   const live='<div class="bar sticky" data-box="pl"><span>'+(hasT?'Gross Profit/(Loss): Rs. <b data-out="gp"></b>':'Income: Rs. <b data-out="income"></b>')+'</span>'+(hasT?'<span>Other income: Rs. <b data-out="income"></b></span>':'')+'<span>Expenses + Depreciation: Rs. <b data-out="expdep"></b></span><span class="sp"><b data-out="npl"></b>: Rs. <b data-out="np"></b></span></div>';
-  return entryHdr('Trading & P&L Account','pl',B('Next →','step','bs'))+live+'<div class="grid g3" style="align-items:start">'+(hasT?trading+indirect+'<div>'+income+result+'</div>':income+indirect+result)+'</div>';
+  return entryHdr('Trading & P&L Account','pl',B('⬆ Import ledger','openImport','ledger','s')+B('Next →','step','bs'))+(y.imp?'<div class="hint" style="margin:0 0 10px">✓ Ledger imported from <b>'+esc(y.imp.file)+'</b> ('+y.imp.rows+' rows). Lines from the ledger are replaced when you import again; typed lines stay.</div>':'')+live+'<div class="grid g3" style="align-items:start">'+(hasT?trading+indirect+'<div>'+income+result+'</div>':income+indirect+result)+'</div>';
 }
 
 /* ================= BALANCE SHEET ================= */
@@ -649,11 +649,143 @@ const A={
   impTab(tab){IMP={tab,rows:null,name:'',err:''};renderImport();},
   impFile(_v,el){const f=el.files&&el.files[0];if(f)impRead(f);},
   impApply(){impApply();},
-  impTemplate(kind){downloadTemplate(kind);}
+  impTemplate(kind){downloadTemplate(kind);},
+  ledClient(v){if(IMP.led){IMP.led.cid=v;renderImport();}},
+  ledFy(v){if(IMP.led){IMP.led.fy=v;renderImport();}}
 };
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:type||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
 
 /* ================= IMPORT ================= */
+/* ================= ledger (Dr/Cr) import ================= */
+const LEDCATS=[["Sales","inc"],["Professional Fees / Service Receipts","inc"],["Commission Received","inc"],["Interest Received","inc"],["Rent Received","inc"],["Discount Received","inc"],["Other Income","inc"],["Purchases","pur"],["Freight & Carriage","dir"],["Wages","dir"],["Power & Fuel","dir"],["Direct Expenses - Other","dir"],["Salaries","ind"],["Rent","ind"],["Office Expenses","ind"],["Interest on Loan","ind"],["Bank Charges","ind"],["Electricity","ind"],["Telephone & Internet","ind"],["Printing & Stationery","ind"],["Travelling & Conveyance","ind"],["Professional Fees Paid","ind"],["Audit Fees","ind"],["Repairs & Maintenance","ind"],["Insurance","ind"],["Advertisement & Promotion","ind"],["Commission Paid","ind"],["Rates & Taxes","ind"],["Miscellaneous Expenses","ind"]];
+const LEDXLSX='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';
+const LEDDEF=new Set(['Freight & Carriage','Wages','Salaries','Rent','Office Expenses','Interest on Loan','Professional Fees / Service Receipts','Interest Received']);
+function dlBlob(name,b64){const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+const grpNorm=s=>{s=normK(s);return /^income/.test(s)?'inc':/^purch/.test(s)?'pur':/^direct/.test(s)?'dir':/^(indirect|expense)/.test(s)?'ind':'';};
+const MONS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function parseDate(v){
+  const ok=(y,m,d)=>(y>=2000&&y<=2100&&m>=1&&m<=12&&d>=1&&d<=31)?{y,m,d}:null;
+  if(v instanceof Date&&!isNaN(v))return ok(v.getFullYear(),v.getMonth()+1,v.getDate());
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return ok(d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate());}
+  const s=String(v==null?'':v).trim();if(!s)return null;
+  if(/^\d{5}(\.\d+)?$/.test(s))return parseDate(parseFloat(s));
+  let m=/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(s);if(m)return ok(+m[1],+m[2],+m[3]);
+  m=/^(\d{1,2})[-\/.\s](\d{1,2})[-\/.\s](\d{2,4})/.exec(s);if(m){let y=+m[3];if(y<100)y+=2000;return ok(y,+m[2],+m[1]);}
+  m=/^(\d{1,2})[-\/.\s]([A-Za-z]{3})[A-Za-z]*[-\/.\s,]*(\d{2,4})/.exec(s);if(m&&MONS[m[2].toLowerCase()]){let y=+m[3];if(y<100)y+=2000;return ok(y,MONS[m[2].toLowerCase()],+m[1]);}
+  return null;
+}
+const fyOfDate=d=>fyFrom(d.m>=4?d.y:d.y-1);
+const amtF=v=>{if(typeof v==='number')return isFinite(v)?v:0;let s=String(v==null?'':v).replace(/[,₹\s]/g,'');let neg=/^\(.*\)$/.test(s);s=s.replace(/[()]/g,'');const n=parseFloat(s);return isFinite(n)?(neg?-n:n):0;};
+async function readLedger(file){
+  let raw=[],cats={};
+  if(/\.csv$|\.txt$/i.test(file.name))raw=parseCSV(await file.text());
+  else{
+    if(!window.XLSX)throw new Error('Excel reader could not load (no internet). Save the Ledger sheet as CSV and import that instead.');
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const nm=wb.SheetNames,lo=n=>n.toLowerCase();
+    const ls=nm.find(n=>lo(n)==='ledger')||nm.find(n=>!/categor|example|how to|instruction/i.test(n))||nm[0];
+    raw=XLSX.utils.sheet_to_json(wb.Sheets[ls],{defval:'',raw:true});
+    const cn=nm.find(n=>/categor/i.test(n));
+    if(cn)XLSX.utils.sheet_to_json(wb.Sheets[cn],{defval:''}).forEach(r=>{const o={};for(const k in r)o[normK(k)]=r[k];const n=pick(o,['category','name','head']);if(n)cats[n.toLowerCase()]={name:n,g:grpNorm(pick(o,['group','section','type']))};});
+  }
+  const rows=[];
+  raw.forEach((r0,i)=>{const o={};for(const k in r0)o[normK(k)]=r0[k];
+    const dv=o.date!==undefined?o.date:(o.txndate!==undefined?o.txndate:(o.transactiondate!==undefined?o.transactiondate:(o.voucherdate!==undefined?o.voucherdate:'')));
+    const r={row:i+2,dateRaw:dv,date:parseDate(dv),part:pick(o,['particulars','narration','description','details','remarks']),
+      dr:amtF(pick(o,['debit','dr','withdrawal','withdrawals','paid'])||0),cr:amtF(pick(o,['credit','cr','deposit','deposits','received'])||0),
+      type:pick(o,['type','nature','incomeexpense']),cat:pick(o,['category','head','ledger','account','expensehead'])};
+    if(!r.part&&!r.dr&&!r.cr&&!r.type&&!r.cat&&(dv===''||dv==null))return;rows.push(r);});
+  if(!rows.length)throw new Error('No ledger rows found. The first row must have the headings: Date, Particulars, Debit, Credit, Type, Category.');
+  return{rows,cats};
+}
+function ledClassify(L,c,fy){
+  const known={};LEDCATS.forEach(([n,g])=>known[n.toLowerCase()]={name:n,g});
+  Object.keys(L.cats).forEach(k=>{const e=L.cats[k];known[k]={name:e.name,g:e.g||(known[k]&&known[k].g)||''};});
+  const hasT=!!c.hasTrading,agg={},res={rows:[],agg:[],cnt:{ok:0,ign:0,out:0,bad:0},tot:{}};
+  L.rows.forEach(r0=>{
+    const r=Object.assign({},r0);res.rows.push(r);
+    const dr=r.dr,cr=r.cr;
+    let t=/^(inc|rec|cr)/i.test(r.type)?'inc':/^(exp|pay|dr)/i.test(r.type)?'exp':/^(ign|bs|skip|no|bal)/i.test(r.type)?'ign':'';
+    const k=r.cat?known[r.cat.toLowerCase()]:null,g=k?k.g:'';
+    if(!t&&g)t=g==='inc'?'inc':'exp';
+    if(t==='ign'){r.st='ign';r.note='Ignored (Balance Sheet item)';res.cnt.ign++;return;}
+    if(!r.date){r.st='bad';r.note='Date missing or not readable';res.cnt.bad++;return;}
+    if(fyOfDate(r.date)!==fy){r.st='out';r.note='Outside FY '+fy+' ('+fyOfDate(r.date)+')';res.cnt.out++;return;}
+    if(!t){r.st='bad';r.note='Type missing (Income / Expense / Ignore)';res.cnt.bad++;return;}
+    if(!dr&&!cr){r.st='bad';r.note='No amount';res.cnt.bad++;return;}
+    let name=k?k.name:(r.cat||''),warn='';
+    if(!name){name=t==='inc'?'Other Income':'Miscellaneous Expenses';warn='No category – put under '+name;}
+    let sec,amt;
+    if(t==='inc'){amt=cr-dr;sec=(name.toLowerCase()==='sales'&&hasT)?'sales':'inc';if(g&&g!=='inc')warn='Category is an expense head but Type is Income';}
+    else{amt=dr-cr;sec=g==='pur'&&hasT?'pur':g==='dir'&&hasT?'dir':'ind';if(g==='inc')warn='Category is an income head but Type is Expense';}
+    if(amt<0&&!warn)warn='Entered on the opposite side – treated as a reversal';
+    r.st='ok';r.note=warn;r.sec=sec;r.name=name;r.amt=amt;res.cnt.ok++;
+    const key=sec+'|'+(sec==='sales'||sec==='pur'?sec:name.toLowerCase());
+    (agg[key]=agg[key]||{sec,name:sec==='sales'?'Sales':sec==='pur'?'Purchases':name,n:0,amt:0});agg[key].n++;agg[key].amt+=amt;
+  });
+  const ord={sales:0,pur:1,dir:2,ind:3,inc:4};
+  res.agg=Object.values(agg).sort((a,b)=>ord[a.sec]-ord[b.sec]||a.name.localeCompare(b.name));
+  const S=s=>Math.round(res.agg.filter(x=>x.sec===s).reduce((q,x)=>q+x.amt,0));
+  res.tot={sales:S('sales'),pur:S('pur'),dir:S('dir'),ind:S('ind'),inc:S('inc')};
+  res.tot.income=res.tot.sales+res.tot.inc;res.tot.exp=res.tot.pur+res.tot.dir+res.tot.ind;res.tot.net=res.tot.income-res.tot.exp;
+  return res;
+}
+function ledFYs(L){const m={};L.rows.forEach(r=>{if(r.date){const f=fyOfDate(r.date);m[f]=(m[f]||0)+1;}});return m;}
+function ledInit(L){
+  const fys=ledFYs(L),keys=Object.keys(fys).sort((a,b)=>fys[b]-fys[a]);
+  const cid=(DB.clients.find(x=>x.id===UI.cid)||DB.clients[0]||{}).id||'';
+  const fy=(UI.fy&&fys[UI.fy])?UI.fy:(keys[0]||defaultFY());
+  IMP.led={rows:L.rows,cats:L.cats,cid,fy,fys};
+}
+const SEC_LBL={sales:'Trading – Sales',pur:'Trading – Purchases',dir:'Trading – Direct expense',ind:'P&L – Indirect expense',inc:'P&L – Income'};
+function ledBody(){
+  const led=IMP.led;
+  let h='<p class="hint">Enter every transaction in the template: <b>Date, Particulars, Debit, Credit, Type, Category</b>. Income and Expense rows fill the Trading / P&amp;L; rows marked <b>Ignore</b> (drawings, capital, loans, asset purchases) are skipped. Balance Sheet, stock and depreciation stay in the portal.</p><button class="btn s sm" data-act="impTemplate" data-a="ledger">⬇ Download Excel template</button>';
+  h+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept=".csv,.xlsx,.xls"></div>';
+  if(IMP.err)h+='<div class="bar err">'+esc(IMP.err)+'</div>';
+  if(!led)return{h,can:false};
+  if(!DB.clients.length)return{h:h+'<div class="bar err">Create the client first, then import their ledger.</div>',can:false};
+  const c=DB.clients.find(x=>x.id===led.cid)||DB.clients[0];
+  const fyKeys=Object.keys(led.fys).sort().reverse();
+  h+='<div class="grid g2" style="margin-top:10px"><div class="f"><label class="l">Client</label><select class="in" data-chg="ledClient">'+DB.clients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(x=>'<option value="'+x.id+'"'+(x.id===c.id?' selected':'')+'>'+esc(dispName(x))+(x.trade?' ('+esc(x.name)+')':'')+'</option>').join('')+'</select></div>'+
+   '<div class="f"><label class="l">Financial year to import</label><select class="in" data-chg="ledFy">'+fyKeys.map(f=>'<option value="'+f+'"'+(f===led.fy?' selected':'')+'>FY '+f+' – '+led.fys[f]+' rows</option>').join('')+'</select></div></div>';
+  const R=ledClassify(led,c,led.fy),t=R.tot;
+  h+='<div class="hint"><b>'+R.cnt.ok+'</b> rows will be imported &middot; '+R.cnt.ign+' ignored &middot; '+R.cnt.out+' outside this FY &middot; <b style="color:'+(R.cnt.bad?'var(--err)':'inherit')+'">'+R.cnt.bad+'</b> need attention'+(c.hasTrading?'':' &middot; <i>no trading account: purchases / direct expenses go under indirect expenses</i>')+'</div>';
+  if(R.agg.length){
+    h+='<div class="scroll"><table><tr><th>Goes to</th><th>Category</th><th class="r">Rows</th><th class="r">Amount (Rs.)</th></tr>'+R.agg.map(x=>'<tr><td>'+SEC_LBL[x.sec]+'</td><td>'+esc(x.name)+'</td><td class="r">'+x.n+'</td><td class="r">'+inr(x.amt)+'</td></tr>').join('')+
+     '<tr><td colspan="3"><b>Total income</b></td><td class="r"><b>'+inr(t.income)+'</b></td></tr><tr><td colspan="3"><b>Total expenses</b></td><td class="r"><b>'+inr(t.exp)+'</b></td></tr><tr><td colspan="3"><b>'+(c.hasTrading?'Net (before stock adjustment &amp; depreciation)':'Net (before depreciation)')+'</b></td><td class="r"><b>'+inr(t.net)+'</b></td></tr></table></div>';
+    const y=c.years[led.fy],ow=[];
+    if(y){const chk=(list,sec)=>R.agg.filter(x=>x.sec===sec).forEach(x=>{const f=(list||[]).find(z=>(z.n||'').trim().toLowerCase()===x.name.toLowerCase());if(f&&num(f.v)&&f.src!=='L')ow.push(x.name+' (now Rs. '+inr(num(f.v))+')');});
+      chk(y.trading.direct,'dir');chk(y.pl.indirect,'ind');chk(y.pl.income,'inc');
+      if(c.hasTrading){if(R.agg.some(x=>x.sec==='sales')&&num(y.trading.sales)&&!(y.imp&&y.imp.sales))ow.push('Sales (now Rs. '+inr(num(y.trading.sales))+')');if(R.agg.some(x=>x.sec==='pur')&&num(y.trading.purchases)&&!(y.imp&&y.imp.pur))ow.push('Purchases (now Rs. '+inr(num(y.trading.purchases))+')');}
+      h+='<div class="hint">'+(y.imp?'This FY already has a ledger import ('+esc(y.imp.file||'file')+') – it will be <b>replaced</b>. ':'FY '+led.fy+' already exists – imported lines are added to it. ')+(ow.length?'<b>Typed values that will be overwritten:</b> '+esc(ow.join(', '))+'.':'')+'</div>';}
+    else h+='<div class="hint">FY '+led.fy+' will be created for this client'+(c.years[prevFY(led.fy)]?' with last year’s closing balances carried forward.':'.')+'</div>';
+  }
+  const iss=R.rows.filter(r=>r.st==='bad'||(r.st==='ok'&&r.note));
+  if(iss.length)h+='<div class="sub" style="margin-top:10px">Check these rows ('+iss.length+')</div><div class="scroll" style="max-height:200px"><table><tr><th>Row</th><th>Particulars</th><th class="r">Debit</th><th class="r">Credit</th><th>Issue</th></tr>'+iss.slice(0,40).map(r=>'<tr><td>'+r.row+'</td><td>'+esc(r.part||'')+'</td><td class="r">'+(r.dr?inr(r.dr):'')+'</td><td class="r">'+(r.cr?inr(r.cr):'')+'</td><td><span class="tag '+(r.st==='bad'?'t5':'t3')+'">'+(r.st==='bad'?'Skipped':'Imported')+'</span> <small>'+esc(r.note)+'</small></td></tr>').join('')+(iss.length>40?'<tr><td colspan="5">… and '+(iss.length-40)+' more</td></tr>':'')+'</table></div>';
+  return{h,can:R.cnt.ok>0};
+}
+function ledApply(){
+  const led=IMP.led;if(!led)return;
+  const c=DB.clients.find(x=>x.id===led.cid);if(!c)return;
+  const R=ledClassify(led,c,led.fy);if(!R.cnt.ok)return;
+  let y=c.years[led.fy];if(!y)y=newYear(c,led.fy);
+  const clr=list=>{for(let i=list.length-1;i>=0;i--){if(list[i].src==='L'){if(LEDDEF.has(list[i].n)){list[i].v=0;delete list[i].src;}else list.splice(i,1);}}};
+  clr(y.trading.direct);clr(y.pl.indirect);clr(y.pl.income);
+  if(y.imp&&y.imp.sales)y.trading.sales=0;if(y.imp&&y.imp.pur)y.trading.purchases=0;
+  const put=(list,x)=>{const v=Math.round(x.amt);const f=list.find(z=>(z.n||'').trim().toLowerCase()===x.name.toLowerCase());if(f){f.v=v;f.src='L';}else list.push({n:x.name,v,src:'L'});};
+  let hasS=false,hasP=false;
+  R.agg.forEach(x=>{
+    if(x.sec==='sales'){y.trading.sales=Math.round(x.amt);hasS=true;}
+    else if(x.sec==='pur'){y.trading.purchases=Math.round(x.amt);hasP=true;}
+    else if(x.sec==='dir')put(y.trading.direct,x);
+    else if(x.sec==='ind')put(y.pl.indirect,x);
+    else put(y.pl.income,x);});
+  y.imp={file:IMP.name||'ledger',at:Date.now(),rows:R.cnt.ok,sales:hasS,pur:hasP};
+  UI.cid=c.id;UI.fy=led.fy;save();closeModal();UI.view='pl';render();window.scrollTo(0,0);
+  toast(R.cnt.ok+' ledger rows imported into FY '+led.fy+'. Net before depreciation: Rs. '+inr(R.tot.net));
+}
+
 let IMP={tab:'clients',rows:null,name:'',err:''};
 const normK=s=>String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'');
 const pick=(o,keys)=>{for(const k of keys)if(o[k]!==undefined&&String(o[k]).trim()!=='')return String(o[k]).trim();return'';};
@@ -674,9 +806,10 @@ async function readTable(file){
   const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
 }
 async function impRead(file){
-  IMP.name=file.name;IMP.err='';IMP.rows=null;
+  IMP.name=file.name;IMP.err='';IMP.rows=null;IMP.led=null;
   try{
     if(IMP.tab==='backup'){const d=JSON.parse(await file.text());if(!d||!Array.isArray(d.clients))throw new Error('This is not a KRN P&L/BS backup file.');IMP.backup=d;IMP.rows=d.clients;}
+    else if(IMP.tab==='ledger'){const L=await readLedger(file);IMP.rows=L.rows;ledInit(L);}
     else{const raw=(await readTable(file)).map(r=>{const o={};for(const k in r)o[normK(k)]=r[k];return o;});
       IMP.rows=IMP.tab==='clients'?raw.map(parseClientRow):raw.map(parseFigRow);
       if(!IMP.rows.length)throw new Error('No data rows found. Check that the first row contains column headings.');}
@@ -737,6 +870,7 @@ function applyFig(r){
 
 function impApply(){
   if(!IMP.rows)return;let msg='';
+  if(IMP.tab==='ledger'){ledApply();return;}
   if(IMP.tab==='clients'){
     const upd=$('#impupd')&&$('#impupd').checked;let n=0,u=0;
     IMP.rows.forEach(r=>{
@@ -757,19 +891,22 @@ function impApply(){
   save();closeModal();UI.view='clients';render();toast(msg);
 }
 function downloadTemplate(kind){
-  if(kind==='clients')download('KRN_Clients_Template.csv','Legal Name,Trade Name,PAN,Entity Type,Address,Signatory,Place,Has Trading (Yes/No),First FY,Opening Capital,Opening Stock\r\nSample Owner,Sample Traders,ABCPK1234F,Proprietorship,"1, Sample Street, Chennai",Sample Owner,Chennai,Yes,2025-26,600000,250000\r\nSample Consultants LLP,,AABFS9087L,LLP,"2, Demo Road, Chennai",Sample Partner,Chennai,No,2025-26,,\r\n','text/csv');
+  if(kind==='ledger')dlBlob('KRN_Ledger_Template.xlsx',LEDXLSX);
+  else if(kind==='clients')download('KRN_Clients_Template.csv','Legal Name,Trade Name,PAN,Entity Type,Address,Signatory,Place,Has Trading (Yes/No),First FY,Opening Capital,Opening Stock\r\nSample Owner,Sample Traders,ABCPK1234F,Proprietorship,"1, Sample Street, Chennai",Sample Owner,Chennai,Yes,2025-26,600000,250000\r\nSample Consultants LLP,,AABFS9087L,LLP,"2, Demo Road, Chennai",Sample Partner,Chennai,No,2025-26,,\r\n','text/csv');
   else download('KRN_Figures_Template.csv','Client,FY,Section,Item,Amount,Rate\r\nSample Traders,2025-26,Trading,Opening Stock,250000,\r\nSample Traders,2025-26,Trading,Purchases,1800000,\r\nSample Traders,2025-26,Trading,Sales,2450000,\r\nSample Traders,2025-26,Trading,Closing Stock,300000,\r\nSample Traders,2025-26,Direct Expense,Wages,40000,\r\nSample Traders,2025-26,Indirect Expense,Rent,90000,\r\nSample Traders,2025-26,Income,Interest Received,10000,\r\nSample Traders,2025-26,Capital,Opening Capital,600000,\r\nSample Traders,2025-26,Capital,Drawings,120000,\r\nSample Traders,2025-26,Liability,Sundry Creditors,150000,\r\nSample Traders,2025-26,Asset,Sundry Debtors,220000,\r\nSample Traders,2025-26,Asset,Bank - HDFC,130000,\r\nSample Traders,2025-26,Fixed Asset,Furniture & Fixtures,150000,10\r\n','text/csv');
 }
 function renderImport(){
-  const T=IMP.tab,tabs=[['clients','Clients (Excel / CSV)'],['figures','Financial figures (Excel / CSV)'],['backup','Backup / Restore']];
+  const T=IMP.tab,tabs=[['clients','Clients (Excel / CSV)'],['ledger','Ledger Dr/Cr → P&L'],['figures','Financial figures (Excel / CSV)'],['backup','Backup / Restore']];
   let body='';
   if(T==='clients')body='<p class="hint">Upload a sheet with columns: <b>Legal Name, Trade Name, PAN, Entity Type, Address, Signatory, Place, Has Trading (Yes/No), First FY, Opening Capital, Opening Stock</b>. Only Legal Name is mandatory; Trade Name is optional. Existing clients (same PAN or name) are skipped.</p><button class="btn s sm" data-act="impTemplate" data-a="clients">⬇ Download template</button>';
+  else if(T==='ledger'){const lb=ledBody();body=lb.h;}
   else if(T==='figures')body='<p class="hint">Bulk-load year figures. Columns: <b>Client, FY, Section, Item, Amount, Rate</b>. Sections: Trading, Direct Expense, Indirect Expense, Income, Capital, Liability, Asset, Fixed Asset (Amount = opening WDV, Rate = depreciation %). The client must already exist; a missing FY is created.</p><button class="btn s sm" data-act="impTemplate" data-a="figures">⬇ Download template</button>';
   else body='<p class="hint">Restore a backup file created with the Backup button, or download a fresh backup now.</p><button class="btn s sm" data-act="backup">⬇ Download backup now</button>';
-  body+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept="'+(T==='backup'?'.json,application/json':'.csv,.xlsx,.xls')+'"></div>';
-  if(IMP.err)body+='<div class="bar err">'+esc(IMP.err)+'</div>';
+  if(T!=='ledger'){body+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept="'+(T==='backup'?'.json,application/json':'.csv,.xlsx,.xls')+'"></div>';
+  if(IMP.err)body+='<div class="bar err">'+esc(IMP.err)+'</div>';}
   let canApply=false;
-  if(IMP.rows){
+  if(T==='ledger'){canApply=ledBody().can;}
+  else if(IMP.rows){
     if(T==='clients'){seenDup(IMP.rows);const nw=IMP.rows.filter(r=>r.status==='new').length;canApply=nw>0||IMP.rows.some(r=>r.status==='dup');
       body+='<div class="hint"><b>'+nw+'</b> new &middot; '+IMP.rows.filter(r=>r.status==='dup').length+' existing &middot; '+IMP.rows.filter(r=>r.status==='bad').length+' invalid</div><div class="scroll"><table><tr><th>Legal name</th><th>Trade name</th><th>PAN</th><th>Type</th><th>Trading</th><th>FY</th><th>Status</th></tr>'+IMP.rows.map(r=>'<tr><td>'+esc(r.name)+'</td><td>'+esc(r.trade||'')+'</td><td>'+esc(r.pan)+'</td><td>'+esc(r.type||'')+'</td><td>'+(r.name?(r.hasTrading?'Yes':'No'):'')+'</td><td>'+esc(r.fy||'')+'</td><td><span class="tag '+({new:'t2',dup:'t3',bad:'t5'}[r.status])+'">'+({new:'New',dup:'Skip',bad:'Invalid'}[r.status])+'</span> <small>'+esc(r.note||'')+'</small></td></tr>').join('')+'</table></div><label class="sw" style="margin-top:10px"><input type="checkbox" class="chk" id="impupd"><span class="tg"></span>Update address / signatory / place of existing clients</label>';}
     else if(T==='figures'){const ok=IMP.rows.filter(r=>r.status==='new').length;canApply=ok>0;
