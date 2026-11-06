@@ -115,6 +115,60 @@ a.lnk{color:var(--pri);font-weight:600;cursor:pointer;margin-right:10px}a.lnk.d{
 .pvlegend+.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.pvon .tot{align-items:center}.pvt{align-self:center;white-space:nowrap;padding:4px 8px;color:#9a6a00;background:#fff4dc;border-radius:8px;padding:0 8px;font-weight:600}
 .pvlegend{font-size:12px;color:var(--mut);margin:0 0 10px}
 .ghost .gname{color:#9a6a00;padding:8px 10px;border:1px dashed #e8c98a;border-radius:10px;font-size:13px}.ghost .gname small{opacity:.7;font-size:10px;margin-left:4px}.ghost .gz{text-align:right;color:#b8bbd3;padding-right:12px}.ghost .gx{color:#9a6a00}
+
+/* ===== Liquid glass · black & white theme ===== */
+:root{--ink:#f4f4f7;--mut:#a6a6b2;--pri:#ffffff;--pri2:#ffffff;--bg:#000;--line:rgba(255,255,255,.26);--ok:#ffffff;--okbg:rgba(255,255,255,.14);--err:#ffb3b3;--errbg:rgba(255,120,120,.16);--glass:linear-gradient(135deg,rgba(255,255,255,.15),rgba(255,255,255,.05));--gb:1px solid rgba(255,255,255,.24);--gs:0 10px 36px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.35)}
+html{background:#000}
+body{background:transparent;color:var(--ink)}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(620px 460px at 14% 8%,rgba(150,150,165,.42),transparent 70%),radial-gradient(520px 420px at 88% 88%,rgba(120,120,135,.36),transparent 70%),radial-gradient(420px 360px at 60% 40%,rgba(90,90,105,.22),transparent 70%),linear-gradient(160deg,#1c1c20,#050506 55%,#000)}
+.side,.card,.mbox,.lkcard,.user,.bar,.pdfdoc-wrap,.stat{background:var(--glass);border:var(--gb);box-shadow:var(--gs);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7)}
+.side{margin:16px 0 16px 16px;top:16px;height:calc(100vh - 32px);border-radius:28px;color:#e8e8ee;padding:20px 12px}
+.card{border-radius:24px}.mbox{border-radius:26px;background:linear-gradient(135deg,rgba(60,60,68,.92),rgba(24,24,28,.94))}
+.logo i{background:linear-gradient(135deg,#fff,#b9b9c2);color:#000;border:1px solid rgba(255,255,255,.7)}.logo small{color:#b0b0bb}
+.nav{border-radius:16px;padding:6px 8px;gap:11px;border:1px solid transparent;color:#e4e4ea;font-weight:500}
+.nav:hover{background:rgba(255,255,255,.1)}
+.nav.a{background:linear-gradient(135deg,rgba(255,255,255,.3),rgba(255,255,255,.08));border-color:rgba(255,255,255,.55);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.6)}
+.nav .ic{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;color:#0b0b0d;background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(255,255,255,.62));box-shadow:0 3px 8px rgba(0,0,0,.4),inset 0 1px 0 #fff}
+.nav .ic svg{width:17px;height:17px}.nav .ex{margin-left:auto;opacity:.75}
+.sl{color:#a6a6b2;letter-spacing:1.4px}
+.user{border-radius:18px;color:#fff}.user small{color:#b0b0bb}.av{background:#fff;color:#000}
+.hd h1{color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.5)}.hd p{color:#b4b4c0}
+.btn{background:linear-gradient(135deg,#ffffff,#cfcfd6);color:#000;border:1px solid rgba(255,255,255,.8);border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.4),inset 0 1px 0 #fff}
+.btn.s{background:var(--glass);color:#fff;border:var(--gb);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.btn.g{background:linear-gradient(135deg,#f2f2f6,#bdbdc7);color:#000;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.btn.r{background:rgba(255,120,120,.1);color:#ffb3b3;border:1px solid rgba(255,150,150,.4)}
+.card h3{color:#fff}.card h3 small{color:#a6a6b2}
+.row .lab{color:#e4e4ea}.hint{color:#a6a6b2}.sub{color:#a6a6b2}
+.in{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.26);color:#fff;border-radius:14px;box-shadow:inset 0 2px 6px rgba(0,0,0,.35)}
+.in:focus{background:rgba(255,255,255,.14);border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18),inset 0 2px 6px rgba(0,0,0,.3)}
+.in.ro{background:rgba(255,255,255,.04);color:#b8b8c3}.in::placeholder{color:#7d7d89}
+select.in option{background:#1a1a1d;color:#fff}
+.f label.l{color:#a6a6b2}
+.tot{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.26);border-radius:16px}
+.tot.gr{background:linear-gradient(135deg,#fff,#d4d4db);color:#000}.tot.rd{background:rgba(255,120,120,.14);color:#ffb3b3;border-color:rgba(255,150,150,.4)}
+.add{color:#fff;text-decoration:underline;text-underline-offset:3px}a.lnk{color:#fff}a.lnk.d{color:#ffb3b3}
+.x{background:rgba(255,255,255,.1);color:#d0d0d8;border:1px solid rgba(255,255,255,.18)}.x:hover{background:rgba(255,120,120,.2);color:#ffb3b3}
+.st{background:var(--glass);border:var(--gb);color:#d6d6de}.st.a{background:linear-gradient(135deg,#fff,#cfcfd6);color:#000;border-color:#fff}.st.d{background:rgba(255,255,255,.16);color:#fff}
+.stat{color:#fff;border-radius:22px}.s1,.s2,.s3,.s4{background:var(--glass)}.s1{box-shadow:var(--gs),inset 0 0 40px rgba(255,255,255,.12)}.s3{box-shadow:var(--gs),inset 0 0 40px rgba(255,255,255,.08)}
+th{color:#a6a6b2;border-bottom:1px solid rgba(255,255,255,.18)}td{border-bottom:1px solid rgba(255,255,255,.09)}
+.tag{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff}.t1,.t2,.t3,.t4{background:rgba(255,255,255,.12);color:#fff}.t5{background:rgba(255,120,120,.16);color:#ffb3b3}
+.bar{border-radius:20px;color:#fff;font-weight:600}.bar.err{color:#ffb3b3;border-color:rgba(255,150,150,.45);background:linear-gradient(135deg,rgba(255,120,120,.2),rgba(255,120,120,.06))}
+.bar.sticky{box-shadow:0 10px 26px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.35)}
+.tg{background:rgba(255,255,255,.22)}.chk:checked+.tg{background:#fff}.chk:checked+.tg:after{background:#000}
+.drop{border-color:rgba(255,255,255,.35);color:#b4b4c0}.scroll{border-color:rgba(255,255,255,.2)}
+.empty{color:#a6a6b2}
+#modal{background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
+.ti{background:rgba(30,30,34,.9);border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(16px)}.ti.err{background:rgba(120,30,30,.9)}
+.pv{color:#c8c8cf;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.4);border-radius:12px}.pv.e{background:transparent;border-color:transparent}
+.pv2{color:#a6a6b2}.pvt{color:#c8c8cf;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.4)}
+.pvlegend{color:#a6a6b2}.ghost .gname{color:#c8c8cf;border-color:rgba(255,255,255,.4)}.ghost .gz{color:#8a8a96}.ghost .gx{color:#fff}
+#lock{background:radial-gradient(620px 460px at 14% 8%,rgba(150,150,165,.42),transparent 70%),radial-gradient(520px 420px at 88% 88%,rgba(120,120,135,.36),transparent 70%),linear-gradient(160deg,#1c1c20,#050506 55%,#000)}
+.lkcard{color:#fff;border-radius:30px}.lklogo{background:linear-gradient(135deg,#fff,#b9b9c2);color:#000}.lkcard p{color:#b4b4c0}
+.lkf label{color:#a6a6b2}.lkin{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.28)}.lkin:focus-within{border-color:#fff;background:rgba(255,255,255,.14);box-shadow:0 0 0 4px rgba(255,255,255,.15)}
+.lkin.err{border-color:#ff9b9b;box-shadow:0 0 0 4px rgba(255,120,120,.2);background:rgba(255,120,120,.1)}.lkin input{color:#fff}.lkeye{color:#c0c0cb}
+.lkbtn{background:linear-gradient(135deg,#fff,#cfcfd6);color:#000;box-shadow:0 8px 24px rgba(0,0,0,.45)}.lkmsg{color:#ffb3b3}.lksmall{color:#a6a6b2}.lksmall b{color:#fff}.lkfoot{color:#a6a6b2}
+.pdfdoc{background:#fff;color:#111;backdrop-filter:none;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+@media (max-width:760px){.side{margin:8px;height:auto;border-radius:20px}}
 </style></head>
 <body>
 <div class="app"><aside class="side" id="side"></aside><main class="main" id="main"></main></div>
@@ -488,12 +542,15 @@ function listRows(path,arr,ph){
 }
 
 /* ---- sidebar ---- */
+const ICO={"clients": "<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/>", "overview": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"9\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\" rx=\"1\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\" rx=\"1\"/>", "pl": "<polyline points=\"23 6 13.5 15.5 8.5 10.5 1 18\"/><polyline points=\"17 6 23 6 23 12\"/>", "bs": "<line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"21\"/><path d=\"M5 21h14\"/><path d=\"M4 7h16\"/><path d=\"M4 7l-3 7a4 4 0 0 0 6 0z\"/><path d=\"M20 7l-3 7a4 4 0 0 0 6 0z\"/>", "preview": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"8\" y1=\"13\" x2=\"16\" y2=\"13\"/><line x1=\"8\" y1=\"17\" x2=\"14\" y2=\"17\"/>", "billing": "<path d=\"M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2l-1 .7-3-2-3 2-3-2-3 2z\" transform=\"translate(0 0) scale(.9) translate(1.3 1.3)\"/><line x1=\"8\" y1=\"9\" x2=\"16\" y2=\"9\"/><line x1=\"8\" y1=\"13\" x2=\"14\" y2=\"13\"/>", "backup": "<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/>", "settings": "<line x1=\"4\" y1=\"21\" x2=\"4\" y2=\"14\"/><line x1=\"4\" y1=\"10\" x2=\"4\" y2=\"3\"/><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"12\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"3\"/><line x1=\"20\" y1=\"21\" x2=\"20\" y2=\"16\"/><line x1=\"20\" y1=\"12\" x2=\"20\" y2=\"3\"/><line x1=\"1\" y1=\"14\" x2=\"7\" y2=\"14\"/><line x1=\"9\" y1=\"8\" x2=\"15\" y2=\"8\"/><line x1=\"17\" y1=\"16\" x2=\"23\" y2=\"16\"/>", "lock": "<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>"};
+const icn=k=>'<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+ICO[k]+'</svg></span>';
+
 function sideHTML(){
   const hasC=!!curClient(),hasY=hasC&&!!latestFY(curClient());
-  const it=(label,view,ok)=>'<div class="nav'+((UI.view===view||(view==='clients'&&UI.view==='form'))?' a':'')+(ok?'':' dis')+'"'+(ok?' data-act="go" data-a="'+view+'"':'')+'><b></b>'+label+'</div>';
+  const it=(label,view,ok)=>'<div class="nav'+((UI.view===view||(view==='clients'&&UI.view==='form'))?' a':'')+(ok?'':' dis')+'"'+(ok?' data-act="go" data-a="'+view+'"':'')+'>'+icn(view==='form'?'clients':view)+label+'</div>';
   return '<div class="logo"><i>KRN</i><div>KRN Tax<small>P&L / Balance Sheet</small></div></div><div class="sl">WORKSPACE</div>'+it('Clients','clients',true)+it('Client Overview','overview',hasC)+it('Trading & P&L','pl',hasY)+it('Balance Sheet','bs',hasY)+it('Preview & Export','preview',hasY)+
-    '<div class="sl">TOOLS</div><div class="nav" data-act="openBilling"><b></b>KRN Billing <span style="margin-left:auto;opacity:.6">\u2197</span></div>'+
-    '<div class="sl">DATA</div><div class="nav" data-act="openImport" data-a="clients"><b></b>Import / Backup</div>'+it('Settings','settings',true)+'<div class="nav" data-act="lockNow"><b></b>Lock</div>'+
+    '<div class="sl">TOOLS</div><div class="nav" data-act="openBilling">'+icn('billing')+'KRN Billing <span class="ex">\u2197</span></div>'+
+    '<div class="sl">DATA</div><div class="nav" data-act="openImport" data-a="clients">'+icn('backup')+'Import / Backup</div>'+it('Settings','settings',true)+'<div class="nav" data-act="lockNow">'+icn('lock')+'Lock</div>'+
     '<div class="user"><div class="av">'+esc((DB.settings.firm||FIRM).charAt(0).toUpperCase())+'</div><div><b>'+esc(DB.settings.firm||FIRM)+'</b><br><small id="saveind">'+(memOnly?'⚠ Storage blocked':'Ready')+'</small></div></div>';
 }
 
@@ -549,7 +606,7 @@ function decoratePrev(){
       add.parentNode.insertBefore(g,add);});});
   /* legend */
   const grid=main.querySelector('.grid');
-  if(grid){const l=document.createElement('div');l.className='pvlegend';l.innerHTML='<span class="pv" style="display:inline-block;padding:2px 10px">Amber</span> = FY '+esc(py.fy)+' (last year) – for reference only, not part of this year’s figures';grid.parentNode.insertBefore(l,grid);}
+  if(grid){const l=document.createElement('div');l.className='pvlegend';l.innerHTML='<span class="pv" style="display:inline-block;padding:2px 10px">Dashed box</span> = FY '+esc(py.fy)+' (last year) – for reference only, not part of this year’s figures';grid.parentNode.insertBefore(l,grid);}
 }
 function go(view){UI.view=view;render();window.scrollTo(0,0);}
 
