@@ -142,8 +142,9 @@ function normFY(s){s=String(s||'');let m=/(\d{4})\s*[-–\/]\s*(\d{2,4})/.exec(s
 /* ================= storage ================= */
 let memOnly=false;
 function loadDB(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);if(d&&Array.isArray(d.clients)){d.settings=d.settings||{firm:FIRM};if(!d.settings.firm)d.settings.firm=FIRM;return d;}}}catch(e){memOnly=true;}return{clients:[],settings:{firm:FIRM}};}
-let DB=loadDB(),saveT=null;
-function saveNow(){try{localStorage.setItem(KEY,JSON.stringify(DB));memOnly=false;setInd('Saved locally ✓ '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));}catch(e){memOnly=true;setInd('⚠ Not saved (storage blocked) – take a backup');}}
+let DB=loadDB(),saveT=null,SKIPSYNC=false;
+function saveNow(){try{localStorage.setItem(KEY,JSON.stringify(DB));memOnly=false;setInd('Saved locally ✓ '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));}catch(e){memOnly=true;setInd('⚠ Not saved (storage blocked) – take a backup');}
+  if(typeof syncDirty==='function')syncDirty();}
 function save(){setInd('Saving…');clearTimeout(saveT);saveT=setTimeout(saveNow,250);}
 function setInd(t){const e=$('#saveind');if(e)e.textContent=t;}
 
@@ -656,7 +657,7 @@ function refreshPreview(){const c=curClient(),y=curYear();if(!c||!y)return;const
 /* ================= SETTINGS ================= */
 function viewSettings(){
   const yrs=DB.clients.reduce((s,c)=>s+Object.keys(c.years).length,0);
-  return hdr('Settings','Preferences and data management','')+'<div class="grid g2" style="align-items:start"><div class="card"><h3>Your Firm</h3><div class="f"><label class="l">Firm name (printed in PDF footer as “Prepared by”)</label>'+tin('firm',DB.settings.firm,'KRN Tax Consultancy','s')+'</div><div class="hint">All data is stored in this browser on this computer. Take regular backups.</div></div>'+
+  return hdr('Settings','Preferences and data management','')+'<div class="grid g2" style="align-items:start"><div class="card"><h3>Your Firm</h3><div class="f"><label class="l">Firm name (printed in PDF footer as “Prepared by”)</label>'+tin('firm',DB.settings.firm,'KRN Tax Consultancy','s')+'</div><div class="hint">Data is stored in this browser. Connect GitHub Sync below to keep an encrypted copy in a private repository and use it on other computers. Take regular backups.</div></div>'+syncCard()+
    '<div class="card"><h3>Security <small>Password for opening the portal</small></h3><div class="f"><label class="l">Current password</label><input class="in" type="password" id="pwcur" autocomplete="current-password"></div><div class="f"><label class="l">New password</label><input class="in" type="password" id="pwnew" autocomplete="new-password"></div><div class="f"><label class="l">Confirm new password</label><input class="in" type="password" id="pwnew2" autocomplete="new-password"></div><div style="display:flex;gap:8px;flex-wrap:wrap">'+B('Change password','changePw')+B('Lock now','lockNow',null,'s')+'</div><div class="hint">Minimum 6 characters. This is a simple lock to keep casual viewers out; it does not encrypt the stored data, so keep backups and use a trusted computer.</div></div>'+
    '<div class="card"><h3>Data</h3><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Clients</div><b>'+DB.clients.length+'</b></div><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Financial years</div><b>'+yrs+'</b></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+B('⬇ Backup all data','backup',null,'s')+B('⬆ Import / Restore','openImport','backup','s')+B('Delete all data','wipe',null,'r')+'</div></div></div>';
 }
@@ -708,7 +709,7 @@ const A={
   done(v){curYear().done=!!v;save();toast(v?'Marked as completed':'Marked as draft');},
   pdf(){exportPDF(curClient(),curYear());},
   backup(){download('KRN_PLBS_Backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({app:'krn-plbs',version:1,exported:new Date().toISOString(),settings:DB.settings,clients:DB.clients},null,1),'application/json');toast('Backup downloaded');},
-  wipe(){if(!confirm('Delete ALL clients and data from this browser? Take a backup first.'))return;if(!confirm('Really delete everything?'))return;DB={clients:[],settings:DB.settings};UI.cid=null;UI.fy=null;save();go('clients');},
+  wipe(){if(syncOn()&&!confirm('GitHub sync is ON: the cloud copy will be overwritten by whatever you enter next. Download a Backup first. Continue?'))return;if(!confirm('Delete ALL clients and data from this browser? Take a backup first.'))return;if(!confirm('Really delete everything?'))return;DB={clients:[],settings:DB.settings};UI.cid=null;UI.fy=null;save();go('clients');},
   openImport(tab){IMP={tab:tab||'clients',rows:null,name:'',err:''};renderImport();},
   impTab(tab){IMP={tab,rows:null,name:'',err:''};renderImport();},
   impFile(_v,el){const f=el.files&&el.files[0];if(f)impRead(f);},
@@ -1002,7 +1003,7 @@ function showLock(mode){
   setTimeout(()=>{const i=$('#lk1');if(i)i.focus();},50);
 }
 function lkMsg(t){const m=$('#lkmsg');if(m)m.textContent=t||'';const b=$('#lkbox');if(b)b.classList.toggle('err',!!t);}
-function openApp(){markUnlocked(true);$('#lock').classList.remove('on');$('#lock').innerHTML='';render();}
+function openApp(){markUnlocked(true);$('#lock').classList.remove('on');$('#lock').innerHTML='';render();syncOnOpen();}
 $('#lock').addEventListener('keydown',e=>{if(e.key==='Enter'){const b=$('#lkgo');if(b&&!b.disabled)b.click();}});
 $('#lock').addEventListener('input',()=>lkMsg(''));
 A.lockEye=(_a,el)=>{const i=el.parentElement.querySelector('input');const show=i.type==='password';i.type=show?'text':'password';el.textContent=show?'Hide':'Show';};
@@ -1020,8 +1021,8 @@ A.lockNow=()=>{markUnlocked(false);showLock(getPW()?'login':'setup');};
 A.lockReset=()=>{
   const t=prompt('Forgot your password?\n\nResetting ERASES all clients stored in this browser and removes the password. Restore from a backup file afterwards if you have one.\n\nType RESET to continue.');
   if(t!=='RESET')return;
-  try{localStorage.removeItem(KEY);localStorage.removeItem(PWKEY);}catch(e){}
-  PWMEM=null;DB={clients:[],settings:{firm:FIRM}};UI.cid=null;UI.fy=null;UI.view='clients';markUnlocked(false);showLock('setup');};
+  try{localStorage.removeItem(KEY);localStorage.removeItem(PWKEY);localStorage.removeItem(SYNCKEY);localStorage.removeItem(SYNCMETA);}catch(e){}
+  SYNC=null;SMETA={sha:null,at:0,dirty:false};PWMEM=null;DB={clients:[],settings:{firm:FIRM}};UI.cid=null;UI.fy=null;UI.view='clients';markUnlocked(false);showLock('setup');};
 A.changePw=async()=>{
   const c=$('#pwcur').value,n=$('#pwnew').value,n2=$('#pwnew2').value;
   if(!(await checkPW(c))){toast('Current password is incorrect',1);return;}
@@ -1029,6 +1030,152 @@ A.changePw=async()=>{
   if(n!==n2){toast('New passwords do not match',1);return;}
   setPW(await makePW(n));['pwcur','pwnew','pwnew2'].forEach(i=>{$('#'+i).value='';});toast('Password changed');};
 
+/* ================= GitHub sync (encrypted, private repo) ================= */
+const SYNCKEY='krn_plbs_sync',SYNCMETA='krn_plbs_syncmeta';
+const lsj=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
+const lsw=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+let SYNC=lsj(SYNCKEY,null),SMETA=lsj(SYNCMETA,{sha:null,at:0,dirty:false}),sBusy=false,sTimer=null,SPEND=null,sErrShown=false;
+const syncOn=()=>!!(SYNC&&SYNC.repo&&SYNC.token&&SYNC.pass);
+const hhmm=()=>new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const saveMeta=()=>lsw(SYNCMETA,SMETA);
+const te=new TextEncoder(),td=new TextDecoder();
+const u8b64=u=>{let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);};
+const b64u8=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function deriveKey(pass,salt){const k=await crypto.subtle.importKey('raw',te.encode(pass),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
+async function encryptDB(){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await deriveKey(SYNC.pass,salt);
+  const plain=JSON.stringify({app:'krn-plbs',version:1,exported:new Date().toISOString(),settings:DB.settings,clients:DB.clients});
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,te.encode(plain)));
+  return JSON.stringify({app:'krn-plbs',v:1,kdf:'PBKDF2-SHA256-200000',cipher:'AES-256-GCM',salt:u8b64(salt),iv:u8b64(iv),data:u8b64(ct),updated:new Date().toISOString()});
+}
+async function decryptDB(text){
+  let o;try{o=JSON.parse(text);}catch(e){throw new Error('The cloud file is not a KRN portal data file.');}
+  if(!o||o.app!=='krn-plbs'||!o.data)throw new Error('The cloud file is not a KRN portal data file.');
+  try{const key=await deriveKey(SYNC.pass,b64u8(o.salt));const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64u8(o.iv)},key,b64u8(o.data));
+    const d=JSON.parse(td.decode(pt));if(!d||!Array.isArray(d.clients))throw 0;return d;}
+  catch(e){const x=new Error('Wrong passphrase for the cloud data (or the file is damaged).');x.pass=true;throw x;}
+}
+const ghH=(raw)=>({Authorization:'Bearer '+SYNC.token,Accept:raw?'application/vnd.github.raw+json':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'});
+const ghURL=()=>'https://api.github.com/repos/'+SYNC.repo+'/contents/'+SYNC.path.split('/').map(encodeURIComponent).join('/');
+async function ghErr(r){let m='';try{m=(await r.json()).message||'';}catch(e){}
+  const e=new Error(r.status===401?'GitHub rejected the token (invalid or expired).':r.status===403?'GitHub refused: the token needs Contents → Read and write on this repository (or you hit a rate limit).':r.status===404?'Repository or file not found, or the token has no access to it.':'GitHub error '+r.status+(m?': '+m:''));e.status=r.status;return e;}
+async function ghRepoInfo(){
+  const r=await fetch('https://api.github.com/repos/'+SYNC.repo,{headers:ghH(),cache:'no-store'});if(!r.ok)throw await ghErr(r);return r.json();}
+async function ghGet(){
+  const r=await fetch(ghURL()+'?ref='+encodeURIComponent(SYNC.branch)+'&t='+Date.now(),{headers:ghH(),cache:'no-store'});
+  if(r.status===404){await ghRepoInfo();return{missing:true};}
+  if(!r.ok)throw await ghErr(r);
+  const j=await r.json();let text;
+  if(j.content&&j.encoding==='base64'&&j.content.length)text=td.decode(b64u8(j.content.replace(/\s/g,'')));
+  else{const r2=await fetch(ghURL()+'?ref='+encodeURIComponent(SYNC.branch)+'&t='+Date.now(),{headers:ghH(true),cache:'no-store'});if(!r2.ok)throw await ghErr(r2);text=await r2.text();}
+  return{sha:j.sha,text};
+}
+async function ghPut(body,sha){
+  const r=await fetch(ghURL(),{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},ghH()),
+    body:JSON.stringify({message:'KRN portal sync '+new Date().toISOString(),content:u8b64(te.encode(body)),branch:SYNC.branch,sha:sha||undefined})});
+  if(r.status===409||r.status===422){const e=new Error('Cloud copy changed while saving.');e.conflict=true;throw e;}
+  if(!r.ok)throw await ghErr(r);
+  return (await r.json()).content.sha;
+}
+function syncFail(e){
+  if(e&&e.message==='Failed to fetch')e=new Error('No internet connection – data is saved on this device and will sync later.');
+  setInd('⚠ Sync problem – saved on this device');
+  if(!sErrShown){sErrShown=true;toast('GitHub sync: '+(e&&e.message||e),1);setTimeout(()=>{sErrShown=false;},60000);}
+  window.__syncErr=e&&e.message;
+}
+function syncDirty(){
+  if(!syncOn()||SKIPSYNC)return;
+  SMETA.dirty=true;saveMeta();clearTimeout(sTimer);sTimer=setTimeout(()=>syncPush(false),4000);
+}
+function applyRemote(data,sha){
+  SKIPSYNC=true;
+  DB.clients=data.clients;DB.settings=Object.assign({firm:FIRM},data.settings||{});if(!DB.settings.firm)DB.settings.firm=FIRM;
+  saveNow();SKIPSYNC=false;
+  SMETA={sha,at:Date.now(),dirty:false};saveMeta();
+  if(UI.cid&&!DB.clients.find(c=>c.id===UI.cid)){UI.cid=null;UI.fy=null;UI.view='clients';}
+  else if(UI.cid&&UI.fy&&!curYear()){UI.fy=latestFY(curClient());}
+  render();setInd('Synced to GitHub ✓ '+hhmm());
+}
+function mergeData(l,r){
+  const out={settings:Object.assign({},r.settings||{},l.settings||{}),clients:[]},rm=new Map((r.clients||[]).map(c=>[c.id,c])),seen=new Set();
+  l.clients.forEach(lc=>{seen.add(lc.id);const rc=rm.get(lc.id);if(!rc){out.clients.push(lc);return;}
+    const m=JSON.parse(JSON.stringify(lc));
+    Object.keys(rc.years||{}).forEach(fy=>{const a=m.years[fy],b=rc.years[fy];if(!a||(b.updated||b.created||0)>(a.updated||a.created||0))m.years[fy]=b;});
+    out.clients.push(m);});
+  (r.clients||[]).forEach(rc=>{if(!seen.has(rc.id))out.clients.push(rc);});
+  return out;
+}
+async function pushWith(sha){
+  const body=await encryptDB();const ns=await ghPut(body,sha);
+  SMETA={sha:ns,at:Date.now(),dirty:false};saveMeta();setInd('Synced to GitHub ✓ '+hhmm());
+}
+async function syncPush(manual){
+  if(!syncOn()||sBusy)return;sBusy=true;clearTimeout(sTimer);setInd('Syncing to GitHub…');
+  try{
+    const rem=await ghGet();
+    if(!rem.missing&&rem.sha!==SMETA.sha){const data=await decryptDB(rem.text);SPEND={sha:rem.sha,data};conflictDialog();return;}
+    if(!DB.clients.length&&!manual){setInd('Cloud copy kept – nothing to push (no clients here)');return;}
+    await pushWith(rem.missing?undefined:rem.sha);
+    sErrShown=false;if(manual)toast('Pushed to GitHub');
+  }catch(e){if(e.conflict){sBusy=false;return syncOnOpen();}syncFail(e);}
+  finally{sBusy=false;}
+}
+async function syncOnOpen(){
+  if(!syncOn()||sBusy)return;sBusy=true;setInd('Checking GitHub…');
+  try{
+    const rem=await ghGet();
+    if(rem.missing){sBusy=false;if(DB.clients.length)return syncPush(true);setInd('Connected – no cloud data yet');return;}
+    if(rem.sha===SMETA.sha){if(SMETA.dirty){sBusy=false;return syncPush(false);}setInd('Synced to GitHub ✓ '+hhmm());return;}
+    const data=await decryptDB(rem.text);
+    if(!SMETA.dirty&&(SMETA.sha||!DB.clients.length)){applyRemote(data,rem.sha);toast('Loaded the latest data from GitHub');return;}
+    SPEND={sha:rem.sha,data};conflictDialog();
+  }catch(e){syncFail(e);}
+  finally{sBusy=false;}
+}
+function conflictDialog(){
+  const r=SPEND.data,nc=(r.clients||[]).length,ny=(r.clients||[]).reduce((s,c)=>s+Object.keys(c.years||{}).length,0);
+  showModal('<div class="mbox" style="max-width:520px"><h2>Cloud and this device differ</h2><p class="hint">The GitHub copy has <b>'+nc+'</b> client(s) and <b>'+ny+'</b> financial year(s). This device has <b>'+DB.clients.length+'</b> client(s). Choose which to keep. Nothing is deleted from GitHub: every earlier version stays in the repo history.</p>'+
+   '<div style="display:grid;gap:8px;margin-top:10px">'+B('Merge both (recommended)','syncMerge')+B('Use the cloud copy (replace this device)','syncUseCloud',null,'s')+B('Keep this device (overwrite the cloud)','syncUseLocal',null,'s')+'</div><div class="hint" style="margin-top:10px">Merge keeps every client from both sides; for the same client and year the most recently edited one wins. Merge never deletes a client.</div><div class="mfoot"><button class="btn s" data-act="syncLater">Decide later</button></div></div>');
+}
+A.syncLater=()=>{closeModal();setInd('⚠ Sync paused – resolve in Settings → Sync');};
+A.syncUseCloud=()=>{if(!SPEND)return;closeModal();applyRemote(SPEND.data,SPEND.sha);SPEND=null;toast('Loaded the cloud copy');};
+A.syncUseLocal=async()=>{if(!SPEND)return;const s=SPEND.sha;SPEND=null;closeModal();sBusy=true;setInd('Syncing to GitHub…');try{await pushWith(s);toast('Cloud copy replaced with this device');}catch(e){syncFail(e);}finally{sBusy=false;}};
+A.syncMerge=async()=>{if(!SPEND)return;const s=SPEND.sha,m=mergeData({settings:DB.settings,clients:DB.clients},SPEND.data);SPEND=null;closeModal();
+  SKIPSYNC=true;DB.clients=m.clients;DB.settings=Object.assign({firm:FIRM},m.settings);saveNow();SKIPSYNC=false;render();
+  sBusy=true;setInd('Syncing to GitHub…');try{await pushWith(s);toast('Merged and synced');}catch(e){syncFail(e);}finally{sBusy=false;}};
+A.syncConnect=async()=>{
+  const repo=($('#syrepo').value||'').trim().replace(/^https?:\/\/github\.com\//i,'').replace(/\.git$/i,'').replace(/\/$/,''),token=($('#sytoken').value||'').trim(),pass=$('#sypass').value||'';
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){toast('Enter the repository as owner/name, e.g. ANOTHEREARTH-12/KRN-PLBS-data',1);return;}
+  if(!token){toast('Paste the access token',1);return;}
+  if(pass.length<8){toast('Passphrase must be at least 8 characters',1);return;}
+  if(pass!==$('#sypass2').value){toast('The two passphrases do not match',1);return;}
+  const prev=SYNC;SYNC={repo,token,pass,branch:'main',path:'krn-plbs-data.json'};
+  try{
+    const info=await ghRepoInfo();
+    if(info.private!==true){SYNC=prev;toast('That repository is PUBLIC. Client data must go in a private repository.',1);return;}
+    if(info.permissions&&info.permissions.push===false){SYNC=prev;toast('The token cannot write to this repository (needs Contents: Read and write).',1);return;}
+    SYNC.branch=info.default_branch||'main';
+  }catch(e){SYNC=prev;toast(e.message==='Failed to fetch'?'No internet connection':e.message,1);return;}
+  lsw(SYNCKEY,SYNC);SMETA={sha:null,at:0,dirty:false};saveMeta();toast('Connected to '+repo);render();syncOnOpen();
+};
+A.syncNow=()=>{if(!syncOn())return;syncOnOpen().then(()=>{if(SMETA.dirty)syncPush(true);});};
+A.syncPull=async()=>{if(!syncOn())return;if(!confirm('Replace the data on this device with the GitHub copy?'))return;
+  sBusy=true;try{const rem=await ghGet();if(rem.missing){toast('No cloud data yet',1);return;}applyRemote(await decryptDB(rem.text),rem.sha);toast('Loaded from GitHub');}catch(e){syncFail(e);}finally{sBusy=false;}};
+A.syncPushForce=async()=>{if(!syncOn())return;
+  if(!DB.clients.length&&!confirm('This device has NO clients. Pushing will replace the cloud copy with an empty one. Continue?'))return;
+  if(!confirm('Overwrite the GitHub copy with the data on this device?'))return;
+  sBusy=true;setInd('Syncing to GitHub…');try{const rem=await ghGet();await pushWith(rem.missing?undefined:rem.sha);toast('Pushed to GitHub');render();}catch(e){syncFail(e);}finally{sBusy=false;}};
+A.syncDisconnect=()=>{if(!confirm('Disconnect from GitHub? The token and passphrase are removed from this browser. Your data here and in the cloud stay as they are.'))return;
+  SYNC=null;SMETA={sha:null,at:0,dirty:false};try{localStorage.removeItem(SYNCKEY);localStorage.removeItem(SYNCMETA);}catch(e){}setInd('Saved locally ✓ '+hhmm());render();toast('Disconnected');};
+function syncCard(){
+  if(syncOn())return '<div class="card"><h3>GitHub Sync <small>Encrypted · private repository</small></h3><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Repository</div><b>'+esc(SYNC.repo)+'</b></div><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Last synced</div><b>'+(SMETA.at?new Date(SMETA.at).toLocaleString():'not yet')+'</b></div><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Unsynced changes</div><b>'+(SMETA.dirty?'Yes':'No')+'</b></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+B('↻ Sync now','syncNow')+B('⬇ Pull from GitHub','syncPull',null,'s')+B('⬆ Push (overwrite cloud)','syncPushForce',null,'s')+B('Disconnect','syncDisconnect',null,'r')+'</div><div class="hint">Changes upload automatically a few seconds after you save, and the latest data is fetched each time you open the portal. The file in GitHub is encrypted with your passphrase – without it the data cannot be read, so do not lose it.</div></div>';
+  return '<div class="card"><h3>GitHub Sync <small>Encrypted · private repository</small></h3><div class="hint" style="margin:0 0 10px">1) Create a <b>private</b> repository (tick “Add a README”), e.g. <b>KRN-PLBS-data</b>.<br>2) GitHub → Settings → Developer settings → Fine-grained tokens → limit it to that one repository, permission <b>Contents: Read and write</b>.<br>3) Paste the details below. Do this once on each computer.</div>'+
+   '<div class="f"><label class="l">Private repository (owner/name)</label><input class="in" id="syrepo" placeholder="ANOTHEREARTH-12/KRN-PLBS-data" autocomplete="off"></div><div class="f"><label class="l">Access token</label><input class="in" id="sytoken" type="password" autocomplete="off" placeholder="github_pat_…"></div>'+
+   '<div class="f"><label class="l">Encryption passphrase (min 8 characters)</label><input class="in" id="sypass" type="password" autocomplete="new-password"></div><div class="f"><label class="l">Confirm passphrase</label><input class="in" id="sypass2" type="password" autocomplete="new-password"></div>'+B('Connect & sync','syncConnect')+
+   '<div class="hint">Use the same passphrase on every computer. It cannot be recovered. The token and passphrase are stored only in this browser.</div></div>';
+}
+
 /* ================= init ================= */
-if(getPW()&&isUnlocked())render();else showLock(getPW()?'login':'setup');
+if(getPW()&&isUnlocked()){render();syncOnOpen();}else showLock(getPW()?'login':'setup');
 </script></body></html>

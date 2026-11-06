@@ -42,3 +42,14 @@ Open `index.html` in Chrome. No build step.
 | `index.html` | The whole application |
 | `README.md` | This file |
 | `.gitignore` | Keeps backups and OS files out of the repo |
+
+
+## GitHub Sync (optional, encrypted)
+
+Settings → GitHub Sync keeps your client data in a **private** GitHub repository so every computer sees the same data.
+
+1. Create a **private** repo (e.g. `KRN-PLBS-data`, tick "Add a README"). Never put client data in this public app repo.
+2. GitHub → Settings → Developer settings → Fine-grained tokens → access to only that repo, permission **Contents: Read and write**.
+3. In the portal paste repo, token and an encryption passphrase (min 8 chars). Use the same passphrase on every computer.
+
+Data is encrypted in your browser (PBKDF2 + AES-256-GCM) before upload; without the passphrase it cannot be read, and it cannot be recovered. Changes upload a few seconds after saving and the latest is fetched when you open the portal. Conflicts offer Merge / Use cloud / Keep this device; nothing is ever deleted from repo history. Keep using Backup as well.
