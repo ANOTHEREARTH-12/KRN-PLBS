@@ -510,7 +510,7 @@ function buildPDF(c,y){
   }else cy=sig(cy);
   const n=doc.getNumberOfPages();
   for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(130);
-    if(DB.settings.firm)doc.text('Prepared by '+DB.settings.firm,mx,H-7);doc.text('Page '+i+' of '+n,W-mx,H-7,{align:'right'});}
+    doc.text('Page '+i+' of '+n,W-mx,H-7,{align:'right'});}
   return doc;
 }
 
@@ -766,7 +766,7 @@ function refreshPreview(){const c=curClient(),y=curYear();if(!c||!y)return;const
 /* ================= SETTINGS ================= */
 function viewSettings(){
   const yrs=DB.clients.reduce((s,c)=>s+Object.keys(c.years).length,0);
-  return hdr('Settings','Preferences and data management','')+'<div class="grid g2" style="align-items:start"><div class="card"><h3>Your Firm</h3><div class="f"><label class="l">Firm name (printed in PDF footer as “Prepared by”)</label>'+tin('firm',DB.settings.firm,'KRN Tax Consultancy','s')+'</div><div class="hint">Data is stored in this browser. Connect GitHub Sync below to keep an encrypted copy in a private repository and use it on other computers. Take regular backups.</div></div>'+syncCard()+
+  return hdr('Settings','Preferences and data management','')+'<div class="grid g2" style="align-items:start"><div class="card"><h3>Your Firm</h3><div class="f"><label class="l">Firm name (shown in the portal)</label>'+tin('firm',DB.settings.firm,'KRN Tax Consultancy','s')+'</div><div class="hint">Data is stored in this browser. Connect GitHub Sync below to keep an encrypted copy in a private repository and use it on other computers. Take regular backups.</div></div>'+syncCard()+
    '<div class="card"><h3>Security <small>Password for opening the portal</small></h3><div class="f"><label class="l">Current password</label><input class="in" type="password" id="pwcur" autocomplete="current-password"></div><div class="f"><label class="l">New password</label><input class="in" type="password" id="pwnew" autocomplete="new-password"></div><div class="f"><label class="l">Confirm new password</label><input class="in" type="password" id="pwnew2" autocomplete="new-password"></div><div style="display:flex;gap:8px;flex-wrap:wrap">'+B('Change password','changePw')+B('Lock now','lockNow',null,'s')+'</div><div class="hint">Minimum 6 characters. This is a simple lock to keep casual viewers out; it does not encrypt the stored data, so keep backups and use a trusted computer.</div></div>'+
    '<div class="card"><h3>Data</h3><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Clients</div><b>'+DB.clients.length+'</b></div><div class="row" style="grid-template-columns:1fr auto"><div class="lab">Financial years</div><b>'+yrs+'</b></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+B('⬇ Backup all data','backup',null,'s')+B('⬆ Import / Restore','openImport','backup','s')+B('Delete all data','wipe',null,'r')+'</div></div></div>';
 }
