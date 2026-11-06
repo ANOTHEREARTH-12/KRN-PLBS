@@ -12,7 +12,8 @@ A single-file web app (`index.html`) for KRN Tax Consultancy to prepare Trading,
 - Live totals while typing: sticky summary bar, column subtotals, and a clear "how much to adjust" message on the Balance Sheet
 - Create next FY: closing balances carry forward automatically
 - Password lock on opening (set on first use; change it under Settings → Security)
-- Export to PDF (horizontal T-format with schedules and signature block)
+- Export to PDF (T-format): Trading/P&L and Balance Sheet on page 1 with the signature, then every schedule on its own page (Capital Account, Fixed Assets, party-wise Debtors / Creditors / Loans)
+- Capital introduced during the year, Advances Received (liability), and a previous-year comparative column for companies
 - Import clients and year figures from Excel / CSV; backup and restore as JSON
 - Ledger import: fill the Excel template (Date, Particulars, Debit, Credit, Type, Category) and the portal builds the Trading / P&L for the chosen client and FY
 

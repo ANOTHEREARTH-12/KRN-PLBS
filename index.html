@@ -161,8 +161,8 @@ function blankYear(fy,c){
     trading:{openStock:0,purchases:0,sales:0,closingStock:0,direct:[{n:'Freight & Carriage',v:0},{n:'Wages',v:0}]},
     pl:{indirect:[{n:'Salaries',v:0},{n:'Rent',v:0},{n:'Office Expenses',v:0},{n:'Interest on Loan',v:0}],
         income:c.hasTrading?[{n:'Interest Received',v:0}]:[{n:'Professional Fees / Service Receipts',v:0},{n:'Interest Received',v:0}]},
-    bs:{openCapital:0,drawings:0,shareCapital:0,openSurplus:0,dividend:0,interestRate:0,
-        partners:kindOf(c)==='firm'?[{name:'',ratio:50,openCapital:0,drawings:0,remuneration:0},{name:'',ratio:50,openCapital:0,drawings:0,remuneration:0}]:[],
+    bs:{openCapital:0,capIntro:0,advRecd:0,debtorList:[],creditorList:[],loanList:[],drawings:0,shareCapital:0,openSurplus:0,dividend:0,interestRate:0,
+        partners:kindOf(c)==='firm'?[{name:'',ratio:50,openCapital:0,drawings:0,remuneration:0,intro:0},{name:'',ratio:50,openCapital:0,drawings:0,remuneration:0,intro:0}]:[],
         secured:0,unsecured:0,creditors:0,taxes:0,otherLiab:[],
         debtors:0,cash:0,banks:[{n:'Bank Account',v:0}],advances:0,otherAssets:[],
         assets:[asset('Furniture & Fixtures',10),asset('Computers',40),asset('Plant & Machinery',15)],
@@ -182,8 +182,10 @@ function compute(c,y){
   const dep=fa.reduce((s,x)=>s+x.dep,0),faClose=fa.reduce((s,x)=>s+x.close,0);
   const indirect=sum(y.pl.indirect),income=sum(y.pl.income);
   const np=gp+income-indirect-dep;
-  const o={kind,gp,direct,fa,dep,faClose,indirect,income,np,partners:[],noRatio:false};
-  if(kind==='prop'){o.capClose=num(b.openCapital)+np-num(b.drawings);o.capTotal=o.capClose;}
+  const eff=(k,lk)=>{const L=b[lk]||[];return L.some(r=>num(r.v))?sum(L):num(b[k]);};
+  const debtors=eff('debtors','debtorList'),creditors=eff('creditors','creditorList'),unsec=eff('unsecured','loanList');
+  const o={kind,gp,direct,fa,dep,faClose,indirect,income,np,partners:[],noRatio:false,debtors,creditors,unsecured:unsec};
+  if(kind==='prop'){o.capClose=num(b.openCapital)+num(b.capIntro)+np-num(b.drawings);o.capTotal=o.capClose;}
   else if(kind==='firm'){
     const P=b.partners||[],rate=dnum(b.interestRate);
     const ints=P.map(p=>Math.round(num(p.openCapital)*rate/100)),rems=P.map(p=>num(p.remuneration));
@@ -191,14 +193,14 @@ function compute(c,y){
     const rs=P.reduce((s,p)=>s+Math.max(dnum(p.ratio),0),0);o.ratioSum=rs;
     let shares=P.map(()=>0);
     if(rs>0&&P.length){shares=P.map(p=>Math.round(pool*Math.max(dnum(p.ratio),0)/rs));shares[P.length-1]+=pool-shares.reduce((s,x)=>s+x,0);}else if(P.length)o.noRatio=true;
-    o.partners=P.map((p,i)=>({name:p.name||('Partner '+(i+1)),open:num(p.openCapital),int:ints[i],rem:rems[i],share:shares[i],draw:num(p.drawings),
-      close:num(p.openCapital)+ints[i]+rems[i]+shares[i]-num(p.drawings)}));
+    o.partners=P.map((p,i)=>({name:p.name||('Partner '+(i+1)),open:num(p.openCapital),int:ints[i],rem:rems[i],share:shares[i],draw:num(p.drawings),intro:num(p.intro),
+      close:num(p.openCapital)+num(p.intro)+ints[i]+rems[i]+shares[i]-num(p.drawings)}));
     o.ti=ti;o.tr=tr;o.pool=pool;o.capTotal=o.partners.reduce((s,p)=>s+p.close,0);
   }else{o.surplusClose=num(b.openSurplus)+np-num(b.dividend);o.capTotal=num(b.shareCapital)+o.surplusClose;}
-  const liabOther=num(b.secured)+num(b.unsecured)+num(b.creditors)+num(b.taxes)+sum(b.otherLiab);
+  const liabOther=num(b.secured)+unsec+creditors+num(b.taxes)+num(b.advRecd)+sum(b.otherLiab);
   const stock=hasT?num(t.closingStock):0;
-  o.stock=stock;o.bankTotal=sum(b.banks);o.tradeDr=hasT?num(t.openStock)+num(t.purchases)+direct:0;o.tradeCr=hasT?num(t.sales)+num(t.closingStock):0;o.curAssets=stock+num(b.debtors)+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
-  const tl=o.capTotal+liabOther,ta=faClose+stock+num(b.debtors)+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
+  o.stock=stock;o.bankTotal=sum(b.banks);o.tradeDr=hasT?num(t.openStock)+num(t.purchases)+direct:0;o.tradeCr=hasT?num(t.sales)+num(t.closingStock):0;o.curAssets=stock+debtors+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
+  const tl=o.capTotal+liabOther,ta=faClose+stock+debtors+num(b.cash)+o.bankTotal+num(b.advances)+sum(b.otherAssets);
   const diff=ta-tl;o.diff=diff;o.susL=0;o.susA=0;
   if(b.autoBalance){if(diff>0)o.susL=diff;else if(diff<0)o.susA=-diff;}
   o.totalLiab=tl+o.susL;o.totalAssets=ta+o.susA;o.balanced=diff===0;
@@ -214,9 +216,10 @@ function carry(c,p,newFY){
   y.pl.indirect=p.pl.indirect.map(r=>({n:r.n,v:0}));
   y.pl.income=p.pl.income.map(r=>({n:r.n,v:0}));
   if(kind==='prop')b.openCapital=m.capClose;
-  else if(kind==='firm'){b.interestRate=pb.interestRate;b.partners=m.partners.map((x,i)=>({name:pb.partners[i].name,ratio:pb.partners[i].ratio,openCapital:x.close,drawings:0,remuneration:x.rem}));}
+  else if(kind==='firm'){b.interestRate=pb.interestRate;b.partners=m.partners.map((x,i)=>({name:pb.partners[i].name,ratio:pb.partners[i].ratio,openCapital:x.close,drawings:0,remuneration:x.rem,intro:0}));}
   else{b.shareCapital=pb.shareCapital;b.openSurplus=m.surplusClose;}
-  ['secured','unsecured','creditors','taxes','debtors','cash','advances'].forEach(k=>b[k]=num(pb[k]));
+  ['secured','taxes','cash','advances','advRecd'].forEach(k=>b[k]=num(pb[k]));b.unsecured=m.unsecured;b.creditors=m.creditors;b.debtors=m.debtors;
+  b.debtorList=(pb.debtorList||[]).map(r=>({n:r.n,v:num(r.v)}));b.creditorList=(pb.creditorList||[]).map(r=>({n:r.n,v:num(r.v)}));b.loanList=(pb.loanList||[]).map(r=>({n:r.n,v:num(r.v)}));
   b.otherLiab=pb.otherLiab.map(r=>({n:r.n,v:num(r.v)}));
   b.banks=pb.banks.map(r=>({n:r.n,v:num(r.v)}));
   b.otherAssets=pb.otherAssets.map(r=>({n:r.n,v:num(r.v)}));
@@ -231,7 +234,8 @@ function pair(L,R,hl,hr){
   for(let i=0;i<n;i++)rows.push({L:L[i]||null,R:R[i]||null});
   return{rows,tl:L.reduce((s,r)=>s+r.a,0),tr:R.reduce((s,r)=>s+r.a,0),hl:hl||'Particulars',hr:hr||'Particulars'};
 }
-function statements(c,y){
+function statements(c,y,opt){
+  opt=opt||{};
   const m=compute(c,y),kind=m.kind,b=y.bs,t=y.trading,S={m,kind,tables:[]};
   const row=(l,a,o)=>Object.assign({l,a},o||{});
   const nz=a=>(a||[]).filter(r=>num(r.v)!==0);
@@ -260,12 +264,43 @@ function statements(c,y){
     m.partners.forEach(p=>{if(p.share>=0)L.push(row('To '+p.name+' – Share of Profit',p.share));else R.push(row('By '+p.name+' – Share of Loss',-p.share));});
     S.appr=pair(L,R);
   }
+  /* schedules (built first so the Balance Sheet can cite them) */
+  const T=[],tsum=a=>a.reduce((s,r)=>s+num(r.v),0);
+  if(kind==='prop'){
+    const rows=[['Opening Balance',money(num(b.openCapital))]];
+    if(num(b.capIntro))rows.push(['Add: Capital introduced during the year',money(num(b.capIntro))]);
+    rows.push([m.np>=0?'Add: Net Profit for the year':'Less: Net Loss for the year',money(m.np)]);
+    if(num(b.drawings))rows.push(['Less: Drawings',money(-num(b.drawings))]);
+    rows.push(['Closing Balance (to Balance Sheet)',money(m.capClose)]);
+    T.push({key:'cap',name:'Capital Account',when:'for the year ended',head:['Particulars','Amount (Rs.)'],rows,boldLast:true,narrow:1});
+  }
+  if(kind==='firm'&&m.partners.length){
+    const P=m.partners,line=(l,k)=>[l].concat(P.map(p=>money(p[k]))).concat([money(P.reduce((s,p)=>s+p[k],0))]);
+    const rows=[line('Opening Balance','open')];
+    if(P.some(p=>p.intro))rows.push(line('Add: Capital introduced','intro'));
+    rows.push(line('Add: Interest on Capital','int'),line('Add: Remuneration','rem'),line('Add/(Less): Share of Profit/(Loss)','share'),
+      ['Less: Drawings'].concat(P.map(p=>money(-p.draw)),[money(-P.reduce((s,p)=>s+p.draw,0))]),line('Closing Balance','close'));
+    T.push({key:'cap',name:"Partners' Capital Accounts",when:'for the year ended',head:['Particulars'].concat(P.map(p=>p.name),['Total']),rows,boldLast:true});
+  }
+  if(b.assets.some((a,i)=>m.fa[i].total||num(a.open))){
+    const A=b.assets,rows=[];let Tt=[0,0,0,0,0,0];
+    A.forEach((a,i)=>{const f=m.fa[i];if(!(num(a.open)||num(a.addFull)||num(a.addHalf)||num(a.disposal)))return;
+      const v=[num(a.open),num(a.addFull),num(a.addHalf),num(a.disposal),f.dep,f.close];v.forEach((x,j)=>Tt[j]+=x);
+      rows.push([a.n||'Asset',dnum(a.rate)+'%'].concat(v.map(money)));});
+    rows.push(['Total',''].concat(Tt.map(money)));
+    T.push({key:'fa',name:'Fixed Assets & Depreciation (WDV)',when:'for the year ended',head:['Asset','Rate','Opening WDV','Add (180 days or more)','Add (below 180 days)','Sale / Deletion','Depreciation','Closing WDV'],rows,boldLast:true});
+  }
+  const plist=(key,name,list)=>{const L=(list||[]).filter(r=>num(r.v)!==0);if(!L.length)return;
+    const rows=L.map(r=>[r.n||'Party',money(num(r.v))]);rows.push(['Total',money(tsum(L))]);
+    T.push({key,name,when:'as at',head:['Name of party','Amount (Rs.)'],rows,boldLast:true,narrow:1});};
+  plist('dr','Sundry Debtors',b.debtorList);plist('cr','Sundry Creditors',b.creditorList);plist('ln','Unsecured Loans',b.loanList);
+  T.forEach((t,i)=>{t.no=i+1;t.title='Schedule '+(i+1)+' – '+t.name;});
+  S.tables=T;
+  const sref=k=>{const t=T.find(x=>x.key===k);return t?' (Schedule '+t.no+')':'';};
   /* Balance sheet */
   {const L=[],R=[];
    if(kind==='prop'){
-     L.push(row('Capital Account – Opening Balance',num(b.openCapital)));
-     L.push(row(m.np>=0?'Add: Net Profit for the year':'Less: Net Loss for the year',m.np));
-     if(num(b.drawings))L.push(row('Less: Drawings',-num(b.drawings)));
+     L.push(row('Capital Account'+sref('cap'),m.capClose));
    }else if(kind==='firm'){
      m.partners.forEach(p=>L.push(row("Partner's Capital A/c – "+p.name,p.close)));
    }else{
@@ -274,34 +309,38 @@ function statements(c,y){
      L.push(row(m.np>=0?'Add: Net Profit for the year':'Less: Net Loss for the year',m.np));
      if(num(b.dividend))L.push(row('Less: Dividend',-num(b.dividend)));
    }
-   [['Secured Loans',b.secured],['Unsecured Loans',b.unsecured],['Sundry Creditors',b.creditors],['Duties & Taxes',b.taxes]].forEach(x=>{if(num(x[1]))L.push(row(x[0],num(x[1])));});
+   [['Secured Loans',num(b.secured)],['Unsecured Loans'+sref('ln'),m.unsecured],['Sundry Creditors'+sref('cr'),m.creditors],['Advances Received',num(b.advRecd)],['Duties & Taxes',num(b.taxes)]].forEach(x=>{if(x[1])L.push(row(x[0],x[1]));});
    nz(b.otherLiab).forEach(r=>L.push(row(r.n||'Other Liabilities',num(r.v))));
    if(m.susL)L.push(row('Difference / Suspense A/c',m.susL));
-   if(m.faClose)R.push(row('Fixed Assets (as per Schedule)',m.faClose));
+   if(m.faClose)R.push(row('Fixed Assets'+(sref('fa')?' (as per Schedule '+T.find(x=>x.key==='fa').no+')':''),m.faClose));
    if(c.hasTrading&&m.stock)R.push(row('Closing Stock',m.stock));
-   if(num(b.debtors))R.push(row('Sundry Debtors',num(b.debtors)));
+   if(m.debtors)R.push(row('Sundry Debtors'+sref('dr'),m.debtors));
    if(num(b.cash))R.push(row('Cash in Hand',num(b.cash)));
    nz(b.banks).forEach(r=>R.push(row('Bank – '+(r.n||'Account'),num(r.v))));
    if(num(b.advances))R.push(row('Loans & Advances',num(b.advances)));
    nz(b.otherAssets).forEach(r=>R.push(row(r.n||'Other Assets',num(r.v))));
    if(m.susA)R.push(row('Difference / Suspense A/c',m.susA));
    S.bs=pair(L,R,'Liabilities','Assets');}
-  /* schedules */
-  if(kind==='firm'&&m.partners.length){
-    const P=m.partners,line=(l,k,bold)=>[l].concat(P.map(p=>money(p[k]))).concat([money(P.reduce((s,p)=>s+p[k],0))]);
-    S.tables.push({title:"Partners' Capital Accounts",head:['Particulars'].concat(P.map(p=>p.name),['Total']),
-      rows:[line('Opening Balance','open'),line('Add: Interest on Capital','int'),line('Add: Remuneration','rem'),line('Add/(Less): Share of Profit/(Loss)','share'),
-            ['Less: Drawings'].concat(P.map(p=>money(-p.draw)),[money(-P.reduce((s,p)=>s+p.draw,0))]),line('Closing Balance','close')],boldLast:true});
-  }
-  if(b.assets.some((a,i)=>m.fa[i].total||num(a.open))){
-    const A=b.assets,rows=[];let T=[0,0,0,0,0,0];
-    A.forEach((a,i)=>{const f=m.fa[i];if(!(num(a.open)||num(a.addFull)||num(a.addHalf)||num(a.disposal)))return;
-      const v=[num(a.open),num(a.addFull),num(a.addHalf),num(a.disposal),f.dep,f.close];v.forEach((x,j)=>T[j]+=x);
-      rows.push([a.n||'Asset',dnum(a.rate)+'%'].concat(v.map(money)));});
-    rows.push(['Total',''].concat(T.map(money)));
-    S.tables.push({title:'Schedule of Fixed Assets & Depreciation (WDV)',head:['Asset','Rate','Opening WDV','Add (≥180 days)','Add (<180 days)','Sale / Deletion','Depreciation','Closing WDV'],rows,boldLast:true});
+  /* previous-year comparatives (companies only) */
+  if(kind==='co'&&!opt.noprev){
+    const py=c.years[prevFY(y.fy)];
+    if(py){
+      const Sp=statements(c,py,{noprev:1});S.cmp=true;S.cfy=y.fy;S.pfy=py.fy;
+      ['trading','pl','bs'].forEach(k=>{if(S[k])S[k]=mergePrev(S[k],Sp[k],y.fy,py.fy);});
+    }
   }
   return S;
+}
+const baseLbl=l=>String(l).replace(/\s*\((?:as per )?Schedule \d+\)/,'');
+function mergePrev(cur,prev,cfy,pfy){
+  const side=(s,k)=>s?s.rows.map(r=>r[k]).filter(Boolean):[],out={};
+  ['L','R'].forEach(k=>{
+    const cs=side(cur,k).map(x=>Object.assign({},x)),ps=side(prev,k).map(x=>Object.assign({},x,{used:false}));
+    cs.forEach(x=>{const f=ps.find(p=>!p.used&&baseLbl(p.l)===baseLbl(x.l));if(f){f.used=true;x.p=f.a;}else x.p=0;});
+    const extra=ps.filter(p=>!p.used).map(p=>({l:p.l,a:0,p:p.a,b:p.b,z:1}));
+    const at=cs.length&&cs[cs.length-1].b?cs.length-1:cs.length;cs.splice(at,0,...extra);out[k]=cs;
+  });
+  const r=pair(out.L,out.R,cur.hl,cur.hr);r.ptl=out.L.reduce((s,x)=>s+x.p,0);r.ptr=out.R.reduce((s,x)=>s+x.p,0);r.cfy=cfy;r.pfy=pfy;return r;
 }
 const hasTrade=c=>!!(c.trade&&String(c.trade).trim());
 const dispName=c=>hasTrade(c)?String(c.trade).trim():c.name;
@@ -309,16 +348,20 @@ function titleHTML(c){return hasTrade(c)?'<h2>'+esc(String(c.trade).trim().toUpp
 const roleOf=c=>({prop:'Proprietor',firm:'Partner',co:'Director'}[kindOf(c)]);
 
 /* ---------- HTML preview ---------- */
+const sigName=c=>{const n=String(c.signatory||'').trim();return(n&&n.toLowerCase()!==roleOf(c).toLowerCase())?n:'';};
 function teeHTML(title,s){
-  let h='<div class="pt">'+esc(title)+'</div><table class="tt"><thead><tr><th>'+esc(s.hl)+'</th><th class="n">Amount (Rs.)</th><th>'+esc(s.hr)+'</th><th class="n">Amount (Rs.)</th></tr></thead><tbody>';
-  s.rows.forEach(r=>{h+='<tr><td class="'+(r.L&&r.L.b?'b':'')+'">'+(r.L?esc(r.L.l):'&nbsp;')+'</td><td class="n '+(r.L&&r.L.b?'b':'')+'">'+(r.L?money(r.L.a):'')+'</td><td class="'+(r.R&&r.R.b?'b':'')+'">'+(r.R?esc(r.R.l):'')+'</td><td class="n '+(r.R&&r.R.b?'b':'')+'">'+(r.R?money(r.R.a):'')+'</td></tr>';});
-  return h+'<tr class="tot2"><td>Total</td><td class="n">'+money(s.tl)+'</td><td>Total</td><td class="n">'+money(s.tr)+'</td></tr></tbody></table>';
+  const cmp=s.pfy!==undefined,nh=cmp?['FY '+s.cfy,'FY '+s.pfy]:['Amount (Rs.)'];
+  const cell=(x,k)=>x?'<td class="'+(x.b?'b':'')+'">'+esc(x.l)+'</td><td class="n '+(x.b?'b':'')+'">'+(x.z?'–':money(x.a))+'</td>'+(cmp?'<td class="n '+(x.b?'b':'')+'">'+(x.p?money(x.p):'–')+'</td>':''):'<td>&nbsp;</td><td></td>'+(cmp?'<td></td>':'');
+  let h='<div class="pt">'+esc(title)+'</div><table class="tt"><thead><tr><th>'+esc(s.hl)+'</th>'+nh.map(x=>'<th class="n">'+esc(x)+'</th>').join('')+'<th>'+esc(s.hr)+'</th>'+nh.map(x=>'<th class="n">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>';
+  s.rows.forEach(r=>{h+='<tr>'+cell(r.L)+cell(r.R)+'</tr>';});
+  return h+'<tr class="tot2"><td>Total</td><td class="n">'+money(s.tl)+'</td>'+(cmp?'<td class="n">'+money(s.ptl)+'</td>':'')+'<td>Total</td><td class="n">'+money(s.tr)+'</td>'+(cmp?'<td class="n">'+money(s.ptr)+'</td>':'')+'</tr></tbody></table>';
 }
 function tblHTML(t){
-  let h='<div class="pt">'+esc(t.title)+'</div><table class="tt"><thead><tr>'+t.head.map((x,i)=>'<th class="'+(i?'n':'')+'">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>';
+  let h='<div style="border-top:2px dashed #c9cce0;margin:30px 0 6px;font-size:10px;color:#9aa0c0;text-align:center;letter-spacing:.1em">NEW PAGE</div><div class="c"><b>'+esc(t.title)+'</b></div><table class="tt"'+(t.narrow?' style="max-width:440px;margin:0 auto"':'')+'><thead><tr>'+t.head.map((x,i)=>'<th class="'+(i?'n':'')+'">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>';
   t.rows.forEach((r,ri)=>{const last=t.boldLast&&ri===t.rows.length-1;h+='<tr class="'+(last?'tot2':'')+'">'+r.map((x,i)=>'<td class="'+(i?'n':'')+'">'+esc(x)+'</td>').join('')+'</tr>';});
   return h+'</tbody></table>';
 }
+function sigHTML(c){return '<div class="sig"><div>Place: '+esc(c.place||'')+'<br>Date: ____________</div><div style="text-align:right">For '+esc(dispName(c))+'<br><br><br>'+(sigName(c)?esc(sigName(c))+'<br>':'')+roleOf(c)+'</div></div>';}
 function docHTML(c,y){
   const S=statements(c,y),inc=UI.opt.inc,end=fyEndText(y.fy);
   let h=titleHTML(c)+'<div class="c">'+esc(c.address||'')+(c.pan?' &nbsp;|&nbsp; PAN: '+esc(c.pan):'')+'</div>';
@@ -330,16 +373,17 @@ function docHTML(c,y){
   }
   if(inc!=='pl'){
     h+='<div class="c" style="margin-top:22px"><b>Balance Sheet as at '+end+'</b></div>'+teeHTML('Balance Sheet',S.bs);
-    S.tables.forEach(t=>h+=tblHTML(t));
   }
-  if(UI.opt.sig)h+='<div class="sig"><div>Place: '+esc(c.place||'')+'<br>Date: ____________</div><div style="text-align:right">For '+esc(dispName(c))+'<br><br><br>'+esc(c.signatory||'')+' ('+roleOf(c)+')</div></div>';
+  if(UI.opt.sig)h+=sigHTML(c);
+  if(inc!=='pl')S.tables.forEach(t=>h+=tblHTML(t));
   return h;
 }
 
 /* ---------- PDF export ---------- */
 function buildPDF(c,y){
   const J=window.jspdf&&window.jspdf.jsPDF;if(!J)return null;
-  const doc=new J({orientation:UI.opt.orient==='l'?'landscape':'portrait',unit:'mm',format:'a4'});
+  const mk=()=>new J({orientation:UI.opt.orient==='l'?'landscape':'portrait',unit:'mm',format:'a4'});
+  const doc=mk();
   if(typeof doc.autoTable!=='function')return null;
   const S=statements(c,y),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),mx=12,aw=W-2*mx,end=fyEndText(y.fy);
   const head=title=>{
@@ -358,21 +402,35 @@ function buildPDF(c,y){
     const a=doc.splitTextToSize((c.address||'')+(c.pan?'   |   PAN: '+c.pan:''),aw);doc.text(a,W/2,21.5+dy,{align:'center'});
     const yy=21.5+dy+a.length*4;doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20);doc.text(title,W/2,yy+3,{align:'center'});return yy+8;};
   const sub=(t,yy)=>{if(yy>H-45){doc.addPage();yy=18;}doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(40);doc.text(t,W/2,yy,{align:'center'});return yy+2.5;};
-  const tee=(s,yy)=>{
-    const body=s.rows.map(r=>[r.L?r.L.l:'',r.L?money(r.L.a):'',r.R?r.R.l:'',r.R?money(r.R.a):'']);body.push(['Total',money(s.tl),'Total',money(s.tr)]);
-    const lw=(aw-56)/2;
-    doc.autoTable({startY:yy,head:[[s.hl,'Amount (Rs.)',s.hr,'Amount (Rs.)']],body,margin:{left:mx,right:mx},theme:'grid',
-      styles:{fontSize:8.5,cellPadding:1.6,lineColor:[150,150,160],lineWidth:.15,textColor:20},headStyles:{fillColor:[231,233,247],textColor:30,fontStyle:'bold'},
-      columnStyles:{0:{cellWidth:lw},1:{cellWidth:28,halign:'right'},2:{cellWidth:lw},3:{cellWidth:28,halign:'right'}},
-      didParseCell:d=>{if(d.section==='head'){if(d.column.index%2)d.cell.styles.halign='right';return;}
-        const i=d.row.index;if(i===body.length-1){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[243,244,251];return;}
-        const side=d.column.index<2?s.rows[i].L:s.rows[i].R;if(side&&side.b)d.cell.styles.fontStyle='bold';}});
-    return doc.lastAutoTable.finalY+7;};
-  const tbl=(t,yy)=>{yy=sub(t.title,yy);
-    doc.autoTable({startY:yy,head:[t.head],body:t.rows,margin:{left:mx,right:mx},theme:'grid',styles:{fontSize:8,cellPadding:1.5,lineColor:[150,150,160],lineWidth:.15,textColor:20},
+  const tee=(s,yy,d)=>{d=d||doc;
+    const cmp=s.pfy!==undefined,i1=cmp?3:2;
+    const body=s.rows.map(r=>{const a=[r.L?r.L.l:'',r.L?(r.L.z?'\u2013':money(r.L.a)):''];if(cmp)a.push(r.L?(r.L.p?money(r.L.p):'–'):'');a.push(r.R?r.R.l:'',r.R?(r.R.z?'\u2013':money(r.R.a)):'');if(cmp)a.push(r.R?(r.R.p?money(r.R.p):'–'):'');return a;});
+    const tr=['Total',money(s.tl)];if(cmp)tr.push(money(s.ptl));tr.push('Total',money(s.tr));if(cmp)tr.push(money(s.ptr));body.push(tr);
+    const nw=cmp?23:28,lw=(aw-2*i1*0-(cmp?4:2)*nw)/2;
+    const hd=[s.hl,cmp?'FY '+s.cfy:'Amount (Rs.)'];if(cmp)hd.push('FY '+s.pfy);hd.push(s.hr,cmp?'FY '+s.cfy:'Amount (Rs.)');if(cmp)hd.push('FY '+s.pfy);
+    const cs={};for(let k=0;k<2;k++){const o=k*i1;cs[o]={cellWidth:lw};for(let j=1;j<i1;j++)cs[o+j]={cellWidth:nw,halign:'right'};}
+    d.autoTable({startY:yy,head:[hd],body,margin:{left:mx,right:mx},theme:'grid',
+      styles:{fontSize:cmp?8:8.5,cellPadding:1.6,lineColor:[150,150,160],lineWidth:.15,textColor:20},headStyles:{fillColor:[231,233,247],textColor:30,fontStyle:'bold'},
+      columnStyles:cs,
+      didParseCell:q=>{const isNum=(q.column.index%i1)!==0;if(q.section==='head'){if(isNum)q.cell.styles.halign='right';return;}
+        const i=q.row.index;if(i===body.length-1){q.cell.styles.fontStyle='bold';q.cell.styles.fillColor=[243,244,251];return;}
+        const side=q.column.index<i1?s.rows[i].L:s.rows[i].R;if(side&&side.b)q.cell.styles.fontStyle='bold';}});
+    return d.lastAutoTable.finalY+7;};
+  const measure=s=>{const d=mk();const h=tee(s,0,d);return d.getNumberOfPages()>1?1e6:h;};
+  const tbl=(t,yy)=>{
+    const m2=t.narrow?(W-130)/2:mx;
+    doc.autoTable({startY:yy,head:[t.head],body:t.rows,margin:{left:m2,right:m2},theme:'grid',styles:{fontSize:8,cellPadding:1.5,lineColor:[150,150,160],lineWidth:.15,textColor:20},
       headStyles:{fillColor:[231,233,247],textColor:30,fontStyle:'bold'},
       didParseCell:d=>{if(d.column.index>0)d.cell.styles.halign='right';if(d.section==='body'&&t.boldLast&&d.row.index===t.rows.length-1){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[243,244,251];}}});
     return doc.lastAutoTable.finalY+7;};
+  const sig=yy=>{
+    if(!UI.opt.sig)return yy;
+    if(yy>H-42){doc.addPage();yy=20;}
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(30);
+    doc.text('Place: '+(c.place||''),mx,yy+6);doc.text('Date: ____________',mx,yy+12);
+    doc.text('For '+dispName(c),W-mx,yy+6,{align:'right'});
+    const nm=sigName(c);if(nm){doc.text(nm,W-mx,yy+22,{align:'right'});doc.text(roleOf(c),W-mx,yy+26.5,{align:'right'});}else doc.text(roleOf(c),W-mx,yy+22,{align:'right'});
+    return yy+30;};
   const inc=UI.opt.inc;let cy=0,started=false;
   if(inc!=='bs'){
     cy=head((c.hasTrading?'Trading and Profit & Loss Account':'Profit & Loss Account')+' for the year ended '+end);started=true;
@@ -381,21 +439,19 @@ function buildPDF(c,y){
     if(S.appr){cy=sub('Profit & Loss Appropriation Account',cy);cy=tee(S.appr,cy);}
   }
   if(inc!=='pl'){
-    if(started)doc.addPage();
-    cy=head('Balance Sheet as at '+end);cy=tee(S.bs,cy);
-    S.tables.forEach(t=>{cy=tbl(t,cy);});
-  }
-  if(UI.opt.sig){
-    if(cy>H-42){doc.addPage();cy=20;}
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(30);
-    doc.text('Place: '+(c.place||''),mx,cy+6);doc.text('Date: ____________',mx,cy+12);
-    doc.text('For '+dispName(c),W-mx,cy+6,{align:'right'});doc.text((c.signatory?c.signatory+' ':'')+'('+roleOf(c)+')',W-mx,cy+24,{align:'right'});
-  }
+    const need=16+measure(S.bs)+(UI.opt.sig?32:0);
+    if(started&&cy+need<=H-14){cy=sub('Balance Sheet as at '+end,cy+3);}
+    else{if(started)doc.addPage();cy=head('Balance Sheet as at '+end);}
+    cy=tee(S.bs,cy);
+    cy=sig(cy);
+    S.tables.forEach(t=>{doc.addPage();cy=head(t.title+' '+t.when+' '+end);cy=tbl(t,cy);});
+  }else cy=sig(cy);
   const n=doc.getNumberOfPages();
   for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(130);
     if(DB.settings.firm)doc.text('Prepared by '+DB.settings.firm,mx,H-7);doc.text('Page '+i+' of '+n,W-mx,H-7,{align:'right'});}
   return doc;
 }
+
 function exportPDF(c,y){
   let doc=null;try{doc=buildPDF(c,y);}catch(e){console.error(e);toast('PDF error: '+e.message,1);return;}
   if(!doc){toast('PDF library not loaded – connect to the internet once and reload the page.',1);return;}
@@ -473,6 +529,9 @@ function refresh(){
     expdep:money(m.indirect+m.dep),tradeDr:inr(m.tradeDr),tradeCr:inr(m.tradeCr),curAssets:inr(m.curAssets),
     ratioMsg:(Math.abs((m.ratioSum||0)-100)<0.005)?'\u2713 Profit shares total 100%':'\u26a0 Profit shares total '+(Math.round((m.ratioSum||0)*100)/100)+'% \u2013 should be 100%'};
   const ad=Math.abs(m.diff);M.balmsg=M.adjmsg=m.balanced?'\u2713 Both sides tally':(y.bs.autoBalance?'Difference of Rs. '+inr(ad)+' shown as Suspense':(m.diff>0?'\u26a0 Assets are Rs. '+inr(ad)+' higher \u2192 add Rs. '+inr(ad)+' to Liabilities, or reduce Assets':'\u26a0 Liabilities are Rs. '+inr(ad)+' higher \u2192 add Rs. '+inr(ad)+' to Assets, or reduce Liabilities'));
+  M.debtorsT=inr(m.debtors);M.creditorsT=inr(m.creditors);M.loansT=inr(m.unsecured);
+  [['debtors','debtorList'],['creditors','creditorList'],['unsecured','loanList']].forEach(([k,lk])=>{const el=document.querySelector('[data-bind="bs.'+k+'"]');if(!el)return;const act=(y.bs[lk]||[]).some(r=>num(r.v));
+    if(act){el.value=m[k]?inr(m[k]):'';el.readOnly=true;el.tabIndex=-1;el.classList.add('ro');}else if(el.readOnly){const v=num(y.bs[k]);el.value=v?inr(v):'';el.readOnly=false;el.removeAttribute('tabindex');el.classList.remove('ro');}});
   m.fa.forEach((x,i)=>{M['dep'+i]=inr(x.dep);M['close'+i]=money(x.close);});
   m.partners.forEach((p,i)=>{M['pint'+i]=inr(p.int);M['pshare'+i]=money(p.share);M['pclose'+i]=money(p.close);});
   document.querySelectorAll('[data-out]').forEach(el=>{const k=el.dataset.out;if(k in M)el.textContent=M[k];});
@@ -556,25 +615,30 @@ function viewPL(){
 /* ================= BALANCE SHEET ================= */
 function viewBS(){
   const c=curClient(),y=curYear(),b=y.bs,kind=kindOf(c),hasT=!!c.hasTrading;
+  ['debtorList','creditorList','loanList'].forEach(k=>{if(!Array.isArray(b[k]))b[k]=[];});
   let cap='';
-  if(kind==='prop')cap=rowN('Capital – Opening (b/f)','bs.openCapital',b.openCapital)+rowO('Add/(Less): Net Profit/(Loss)','np')+rowN('Less: Drawings','bs.drawings',b.drawings);
+  if(kind==='prop')cap=rowN('Capital – Opening (b/f)','bs.openCapital',b.openCapital)+rowN('Add: Capital introduced during the year','bs.capIntro',b.capIntro)+rowO('Add/(Less): Net Profit/(Loss)','np')+rowN('Less: Drawings','bs.drawings',b.drawings);
   else if(kind==='co')cap=rowN('Share Capital','bs.shareCapital',b.shareCapital)+rowN('Reserves & Surplus – Opening','bs.openSurplus',b.openSurplus)+rowO('Add/(Less): Net Profit/(Loss)','np')+rowN('Less: Dividend','bs.dividend',b.dividend);
   else cap='<div class="row"><div class="lab">Partners’ capital (see table below)</div>'+out('capTotal')+'</div>';
-  const liab='<div class="card"><h3>Capital &amp; Liabilities</h3>'+cap+rowN('Secured Loans','bs.secured',b.secured)+rowN('Unsecured Loans','bs.unsecured',b.unsecured)+rowN('Sundry Creditors','bs.creditors',b.creditors)+rowN('Duties & Taxes','bs.taxes',b.taxes)+
+  const liab='<div class="card"><h3>Capital &amp; Liabilities</h3>'+cap+rowN('Secured Loans','bs.secured',b.secured)+rowN('Unsecured Loans','bs.unsecured',b.unsecured)+rowN('Sundry Creditors','bs.creditors',b.creditors)+rowN('Advances Received','bs.advRecd',b.advRecd)+rowN('Duties & Taxes','bs.taxes',b.taxes)+
     '<div class="sub">Other liabilities</div>'+listRows('bs.otherLiab',b.otherLiab,'Liability name')+'<div class="tot"><span>Total Capital &amp; Liabilities</span><span data-out="totalLiab"></span></div></div>';
   const ast='<div class="card"><h3>Current Assets</h3>'+(hasT?'<div class="row"><div class="lab">Closing Stock (from Trading)</div>'+nin('trading.closingStock',y.trading.closingStock)+'</div>':'')+rowN('Sundry Debtors','bs.debtors',b.debtors)+rowN('Cash in Hand','bs.cash',b.cash)+
-    '<div class="sub">Bank balances</div>'+listRows('bs.banks',b.banks,'Bank name')+rowN('Loans & Advances','bs.advances',b.advances)+'<div class="sub">Other assets / deposits</div>'+listRows('bs.otherAssets',b.otherAssets,'Asset name')+'<div class="tot"><span>Total Current Assets</span><span data-out="curAssets"></span></div><div class="tot"><span>+ Fixed Assets (WDV)</span><span data-out="faClose"></span></div><div class="tot"><span>Total Assets</span><span data-out="totalAssets"></span></div></div>';
-  const fa='<div class="card"><h3>Fixed Assets <small>Depreciation (WDV) flows to the P&amp;L</small></h3><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Asset block</th><th class="r">Rate %</th><th class="r">Opening WDV</th><th class="r">Add ≥180 days</th><th class="r">Add &lt;180 days</th><th class="r">Sale / Deletion</th><th class="r">Depreciation</th><th class="r">Closing WDV</th><th></th></tr>'+
+    '<div class="sub">Bank balances</div>'+listRows('bs.banks',b.banks,'Bank name')+rowN('Loans & Advances given (asset)','bs.advances',b.advances)+'<div class="sub">Other assets / deposits</div>'+listRows('bs.otherAssets',b.otherAssets,'Asset name')+'<div class="tot"><span>Total Current Assets</span><span data-out="curAssets"></span></div><div class="tot"><span>+ Fixed Assets (WDV)</span><span data-out="faClose"></span></div><div class="tot"><span>Total Assets</span><span data-out="totalAssets"></span></div></div>';
+  const fa='<div class="card"><h3>Fixed Assets <small>Depreciation (WDV) flows to the P&amp;L</small></h3><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Asset block</th><th class="r">Rate %</th><th class="r">Opening WDV</th><th class="r">Add (180 days or more)</th><th class="r">Add (below 180 days)</th><th class="r">Sale / Deletion</th><th class="r">Depreciation</th><th class="r">Closing WDV</th><th></th></tr>'+
     b.assets.map((a,i)=>'<tr><td style="min-width:150px">'+tin('bs.assets.'+i+'.n',a.n,'Asset name')+'</td><td style="width:70px">'+din('bs.assets.'+i+'.rate',a.rate)+'</td><td>'+nin('bs.assets.'+i+'.open',a.open)+'</td><td>'+nin('bs.assets.'+i+'.addFull',a.addFull)+'</td><td>'+nin('bs.assets.'+i+'.addHalf',a.addHalf)+'</td><td>'+nin('bs.assets.'+i+'.disposal',a.disposal)+'</td><td>'+out('dep'+i)+'</td><td>'+out('close'+i)+'</td><td><button class="x" data-act="delRow" data-a="bs.assets.'+i+'">×</button></td></tr>').join('')+
     '</table></div><span class="add" data-act="addRow" data-a="bs.assets">＋ Add asset block</span><div class="tot"><span>Closing WDV (to Balance Sheet)</span><span data-out="faClose"></span></div><div class="hint">Additions used for 180 days or more get full-year depreciation; those used for less get half the rate.</div></div>';
   let pt='';
   if(kind==='firm'){
-    pt='<div class="card"><h3>Partners’ Capital Accounts <small>Interest and remuneration are appropriations, not P&amp;L expenses</small></h3><div class="f" style="max-width:240px"><label class="l">Interest on capital (% p.a.)</label>'+din('bs.interestRate',b.interestRate)+'</div><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Partner</th><th class="r">Profit share %</th><th class="r">Opening capital</th><th class="r">Interest</th><th class="r">Remuneration</th><th class="r">Share of profit</th><th class="r">Drawings</th><th class="r">Closing capital</th><th></th></tr>'+
-      b.partners.map((p,i)=>'<tr><td style="min-width:140px">'+tin('bs.partners.'+i+'.name',p.name,'Partner '+(i+1))+'</td><td style="width:80px">'+din('bs.partners.'+i+'.ratio',p.ratio)+'</td><td>'+nin('bs.partners.'+i+'.openCapital',p.openCapital)+'</td><td>'+out('pint'+i)+'</td><td>'+nin('bs.partners.'+i+'.remuneration',p.remuneration)+'</td><td>'+out('pshare'+i)+'</td><td>'+nin('bs.partners.'+i+'.drawings',p.drawings)+'</td><td>'+out('pclose'+i)+'</td><td><button class="x" data-act="delRow" data-a="bs.partners.'+i+'">×</button></td></tr>').join('')+
+    pt='<div class="card"><h3>Partners’ Capital Accounts <small>Interest and remuneration are appropriations, not P&amp;L expenses</small></h3><div class="f" style="max-width:240px"><label class="l">Interest on capital (% p.a.)</label>'+din('bs.interestRate',b.interestRate)+'</div><div style="overflow-x:auto"><table class="tbl-in"><tr><th>Partner</th><th class="r">Profit share %</th><th class="r">Opening capital</th><th class="r">Capital introduced</th><th class="r">Interest</th><th class="r">Remuneration</th><th class="r">Share of profit</th><th class="r">Drawings</th><th class="r">Closing capital</th><th></th></tr>'+
+      b.partners.map((p,i)=>'<tr><td style="min-width:140px">'+tin('bs.partners.'+i+'.name',p.name,'Partner '+(i+1))+'</td><td style="width:80px">'+din('bs.partners.'+i+'.ratio',p.ratio)+'</td><td>'+nin('bs.partners.'+i+'.openCapital',p.openCapital)+'</td><td>'+nin('bs.partners.'+i+'.intro',p.intro)+'</td><td>'+out('pint'+i)+'</td><td>'+nin('bs.partners.'+i+'.remuneration',p.remuneration)+'</td><td>'+out('pshare'+i)+'</td><td>'+nin('bs.partners.'+i+'.drawings',p.drawings)+'</td><td>'+out('pclose'+i)+'</td><td><button class="x" data-act="delRow" data-a="bs.partners.'+i+'">×</button></td></tr>').join('')+
       '</table></div><span class="add" data-act="addRow" data-a="bs.partners">＋ Add partner</span><div class="hint" style="font-weight:600" data-out="ratioMsg"></div></div>';
   }
+  const party='<div class="card"><h3>Party-wise schedules <small>Optional. When a list has amounts it replaces the single figure above and prints as its own schedule page.</small></h3><div class="grid g3" style="align-items:start">'+
+    '<div><div class="sub">Sundry Debtors</div>'+listRows('bs.debtorList',b.debtorList,'Party name')+'<div class="tot"><span>To Balance Sheet</span><span data-out="debtorsT"></span></div></div>'+
+    '<div><div class="sub">Sundry Creditors</div>'+listRows('bs.creditorList',b.creditorList,'Party name')+'<div class="tot"><span>To Balance Sheet</span><span data-out="creditorsT"></span></div></div>'+
+    '<div><div class="sub">Unsecured Loans</div>'+listRows('bs.loanList',b.loanList,'Lender name')+'<div class="tot"><span>To Balance Sheet</span><span data-out="loansT"></span></div></div></div></div>';
   const bar='<div class="bar sticky" data-box="bal"><span>Liabilities: Rs. <b data-out="totalLiab"></b></span><span>Assets: Rs. <b data-out="totalAssets"></b></span><span data-out="adjmsg"></span><span class="sp"><label class="sw" style="font-weight:500"><input type="checkbox" class="chk" data-t="b" data-bind="bs.autoBalance" data-rerender="1"'+(b.autoBalance?' checked':'')+'><span class="tg"></span>Show difference as Suspense</label></span></div>';
-  return entryHdr('Balance Sheet','bs',B('← Back','step','pl','s')+B('Next →','step','preview'))+bar+'<div class="grid g2" style="align-items:start">'+liab+ast+'</div>'+fa+pt;
+  return entryHdr('Balance Sheet','bs',B('← Back','step','pl','s')+B('Next →','step','preview'))+bar+'<div class="grid g2" style="align-items:start">'+liab+ast+'</div>'+fa+party+pt;
 }
 
 /* ================= PREVIEW & EXPORT ================= */
@@ -634,7 +698,7 @@ const A={
   doAddYear(){const fy=$('#newfy').value;closeModal();A.createYear(fy);},
   closeModal(){closeModal();},
   addRow(path){const y=curYear(),arr=getPath(y,path),k=path.split('.').pop();
-    arr.push(k==='assets'?asset('',10):k==='partners'?{name:'',ratio:0,openCapital:0,drawings:0,remuneration:0}:{n:'',v:0});
+    arr.push(k==='assets'?asset('',10):k==='partners'?{name:'',ratio:0,openCapital:0,drawings:0,remuneration:0,intro:0}:{n:'',v:0});
     render();const el=$('[data-bind="'+path+'.'+(arr.length-1)+'.'+(k==='partners'?'name':'n')+'"]');if(el)el.focus();},
   delRow(path){const y=curYear(),p=path.split('.'),i=+p.pop(),arr=getPath(y,p.join('.'));arr.splice(i,1);save();render();},
   switchFy(fy){UI.fy=fy;render();},
@@ -845,8 +909,8 @@ function parseFigRow(o){
 function figTarget(c,r){
   const sec=r.section,it=normK(r.item);
   const map={trading:{openingstock:'openStock',purchases:'purchases',purchase:'purchases',sales:'sales',sale:'sales',closingstock:'closingStock'},
-    capital:{openingcapital:'openCapital',capital:'openCapital',drawings:'drawings',sharecapital:'shareCapital',openingsurplus:'openSurplus',reserves:'openSurplus',reservesandsurplus:'openSurplus',dividend:'dividend'},
-    liability:{securedloans:'secured',secured:'secured',unsecuredloans:'unsecured',unsecured:'unsecured',sundrycreditors:'creditors',creditors:'creditors',dutiesandtaxes:'taxes',taxes:'taxes'},
+    capital:{capitalintroduced:'capIntro',additionalcapital:'capIntro',openingcapital:'openCapital',capital:'openCapital',drawings:'drawings',sharecapital:'shareCapital',openingsurplus:'openSurplus',reserves:'openSurplus',reservesandsurplus:'openSurplus',dividend:'dividend'},
+    liability:{advancesreceived:'advRecd',advancefromcustomers:'advRecd',securedloans:'secured',secured:'secured',unsecuredloans:'unsecured',unsecured:'unsecured',sundrycreditors:'creditors',creditors:'creditors',dutiesandtaxes:'taxes',taxes:'taxes'},
     asset:{sundrydebtors:'debtors',debtors:'debtors',cashinhand:'cash',cash:'cash',loansandadvances:'advances',advances:'advances'}};
   const S={trading:'trading',directexpense:'direct',direct:'direct',indirectexpense:'indirect',indirect:'indirect',expense:'indirect',income:'income',capital:'capital',liability:'liability',asset:'asset',fixedasset:'fixed',fixedassets:'fixed'}[sec];
   if(!S)return{err:'Unknown section "'+sec+'"'};
