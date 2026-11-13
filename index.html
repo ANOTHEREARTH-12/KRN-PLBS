@@ -1071,13 +1071,14 @@ function downloadTemplate(kind){
   else download('KRN_Figures_Template.csv','Client,FY,Section,Item,Amount,Rate\r\nSample Traders,2025-26,Trading,Opening Stock,250000,\r\nSample Traders,2025-26,Trading,Purchases,1800000,\r\nSample Traders,2025-26,Trading,Sales,2450000,\r\nSample Traders,2025-26,Trading,Closing Stock,300000,\r\nSample Traders,2025-26,Direct Expense,Wages,40000,\r\nSample Traders,2025-26,Indirect Expense,Rent,90000,\r\nSample Traders,2025-26,Income,Interest Received,10000,\r\nSample Traders,2025-26,Capital,Opening Capital,600000,\r\nSample Traders,2025-26,Capital,Drawings,120000,\r\nSample Traders,2025-26,Liability,Sundry Creditors,150000,\r\nSample Traders,2025-26,Asset,Sundry Debtors,220000,\r\nSample Traders,2025-26,Asset,Bank - HDFC,130000,\r\nSample Traders,2025-26,Fixed Asset,Furniture & Fixtures,150000,10\r\n','text/csv');
 }
 function renderImport(){
-  const T=IMP.tab,tabs=[['clients','Clients (Excel / CSV)'],['ledger','Ledger Dr/Cr → P&L'],['figures','Financial figures (Excel / CSV)'],['backup','Backup / Restore']];
+  const T=IMP.tab,tabs=[['clients','Clients (Excel / CSV)'],['ledger','Ledger Dr/Cr → P&L'],['figures','Financial figures (Excel / CSV)'],['json','KRN Billing JSON'],['backup','Backup / Restore']];
   let body='';
   if(T==='clients')body='<p class="hint">Upload a sheet with columns: <b>Legal Name, Trade Name, PAN, Entity Type, Address, Signatory, Place, Has Trading (Yes/No), First FY, Opening Capital, Opening Stock</b>. Only Legal Name is mandatory; Trade Name is optional. Existing clients (same PAN or name) are skipped.</p><button class="btn s sm" data-act="impTemplate" data-a="clients">⬇ Download template</button>';
+  else if(T==='json')body='<p class="hint">Import a <b>KRN Billing</b> export file (.json). The client is identified by <b>PAN</b>: if the PAN matches a client here, that client\u2019s FY figures are replaced (after you confirm); if not, you can create the client. You will see a preview with all values first.</p><div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="jsonFile" accept=".json,application/json"></div>'+(IMP.err?'<div class="bar err">'+esc(IMP.err)+'</div>':'');
   else if(T==='ledger'){const lb=ledBody();body=lb.h;}
   else if(T==='figures')body='<p class="hint">Bulk-load year figures. Columns: <b>Client, FY, Section, Item, Amount, Rate</b>. Sections: Trading, Direct Expense, Indirect Expense, Income, Capital, Liability, Asset, Fixed Asset (Amount = opening WDV, Rate = depreciation %). The client must already exist; a missing FY is created.</p><button class="btn s sm" data-act="impTemplate" data-a="figures">⬇ Download template</button>';
   else body='<p class="hint">Restore a backup file created with the Backup button, or download a fresh backup now.</p><button class="btn s sm" data-act="backup">⬇ Download backup now</button>';
-  if(T!=='ledger'){body+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept="'+(T==='backup'?'.json,application/json':'.csv,.xlsx,.xls')+'"></div>';
+  if(T!=='ledger'&&T!=='json'){body+='<div class="drop">'+(IMP.name?'<b>'+esc(IMP.name)+'</b><br>':'')+'<input type="file" data-chg="impFile" accept="'+(T==='backup'?'.json,application/json':'.csv,.xlsx,.xls')+'"></div>';
   if(IMP.err)body+='<div class="bar err">'+esc(IMP.err)+'</div>';}
   let canApply=false;
   if(T==='ledger'){canApply=ledBody().can;}
@@ -1287,6 +1288,135 @@ function syncCard(){
 }
 
 A.openBilling=()=>{window.open(BILLING_URL,'_blank','noopener');};
+/* ================= KRN Billing JSON import (PAN-verified) ================= */
+let IMPJ=null;
+const jPan=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const jName=o=>String(o&&(o.head||o.name||o.particulars||o.category||o.item||o.ledger||'')||'').trim();
+const jAmt=o=>num(o&&(o.amount!==undefined?o.amount:o.value!==undefined?o.value:o.total));
+const jTypeFromPan=p=>({F:'Partnership',C:'Company'}[p.charAt(3)]||'Proprietorship');
+function jFY(s){const m=String(s||'').trim().match(/^(\d{4})\s*[-\/–]\s*(\d{2}|\d{4})$/);if(!m)return'';const a=+m[1],b=+m[2]%100;return((a+1)%100===b)?a+'-'+String(b).padStart(2,'0'):'';}
+function jPlan(doc){
+  const P={doc,warn:[],notes:[],err:'',inc:true},cl=(doc&&doc.client)||{};
+  let pan=jPan(cl.pan);const g=String(cl.gstin||'').toUpperCase().replace(/\s/g,''),gm=g.match(/^\d{2}([A-Z]{5}\d{4}[A-Z])[A-Z\d]Z[A-Z\d]$/);
+  if(gm){if(!pan||(pan.length<10&&gm[1].indexOf(pan)===0)){if(pan)P.notes.push('PAN in the file ('+pan+') is incomplete; completed from the GSTIN as '+gm[1]+'.');pan=gm[1];}
+    else if(pan.length===10&&pan!==gm[1])P.warn.push('PAN in the file ('+pan+') differs from the PAN inside the GSTIN ('+gm[1]+'). Using '+pan+'.');}
+  P.pan=pan;P.name=String(cl.name||'').trim();P.address=String(cl.address||'').trim();P.fy=jFY(doc&&doc.financialYear);
+  if(!/^[A-Z]{5}\d{4}[A-Z]$/.test(pan))P.err='PAN "'+(cl.pan||'')+'" is missing or not valid (a PAN looks like AAAAA9999A), so this client cannot be verified.';
+  else if(!P.fy)P.err='Financial year "'+(doc&&doc.financialYear||'')+'" is missing or not valid (expected like 2026-27).';
+  else if(!P.name)P.err='Client name is missing in the file.';
+  if(!P.err){const m=DB.clients.find(c=>{const q=jPan(c.pan);return q&&(q===pan||(q.length===9&&pan.indexOf(q)===0));});P.cid=m?m.id:null;
+    if(!m){const n=P.name.toLowerCase(),s=DB.clients.find(c=>c.name.trim().toLowerCase()===n||(c.trade||'').trim().toLowerCase()===n);if(s)P.warn.push('A client named “'+s.name+'” already exists (PAN '+(s.pan||'not set')+') but its PAN does not match. Importing will create a separate new client.');}}
+  P.type=jTypeFromPan(pan);P.hasT=true;return P;
+}
+function jMap(P,kind){
+  const d=P.doc,t=d.trading||{},pl=d.profitAndLoss||{},bs=d.balanceSheet||{},M={t:{openStock:num(t.openingStock!==undefined?t.openingStock:t.openStock),purchases:num(t.purchases),sales:num(t.sales),closingStock:num(t.closingStock)},direct:[],indirect:[],income:[],otherLiab:[],otherAssets:[],banks:[],b:{creditors:0,taxes:0,secured:0,unsecured:0,advRecd:0,debtors:0,cash:0,advances:0},cap:null,notes:[]};
+  const push=(L,n,v)=>{if(!v)return;const f=L.find(x=>x.n.toLowerCase()===n.toLowerCase());if(f)f.v+=v;else L.push({n,v});};
+  (Array.isArray(t.directExpenses)?t.directExpenses:[]).forEach(e=>push(M.direct,jName(e)||'Direct expense',jAmt(e)));
+  (Array.isArray(pl.expenses)?pl.expenses:[]).forEach(e=>{const nm=jName(e)||'Expense',ty=String(e.type||e.kind||e.group||e.nature||e.section||'').toLowerCase();
+    if(/income|receipt/.test(ty))push(M.income,nm,jAmt(e));else if(/direct/.test(ty)&&!/indirect/.test(ty))push(M.direct,nm,jAmt(e));else push(M.indirect,nm,jAmt(e));});
+  (Array.isArray(pl.income)?pl.income:Array.isArray(pl.otherIncome)?pl.otherIncome:[]).forEach(e=>push(M.income,jName(e)||'Income',jAmt(e)));
+  let capHead=0,stockAsset=0,fixedSeen=false;
+  (Array.isArray(bs.liabilities)?bs.liabilities:[]).forEach(e=>{const h=jName(e),l=h.toLowerCase(),v=jAmt(e);
+    if(/capital|proprietor|reserves|surplus|net worth/.test(l)){capHead+=v;return;}
+    if(/duties|taxes|\bgst\b|\btds\b|statutory/.test(l))M.b.taxes+=v;
+    else if(/creditor|payable/.test(l))M.b.creditors+=v;
+    else if(/advance/.test(l)&&/receiv|customer/.test(l))M.b.advRecd+=v;
+    else if(/unsecured/.test(l))M.b.unsecured+=v;
+    else if(/secured|term loan|overdraft|cash credit|bank loan|\bod\b|\bcc\b/.test(l))M.b.secured+=v;
+    else if(/loan/.test(l))M.b.unsecured+=v;
+    else if(/suspense|difference/.test(l)){if(v)M.notes.push('“'+h+'” ('+inr(v)+') was not imported; use “Show difference as Suspense” on the Balance Sheet if needed.');}
+    else push(M.otherLiab,h||'Other liability',v);});
+  (Array.isArray(bs.assets)?bs.assets:[]).forEach(e=>{const h=jName(e),l=h.toLowerCase(),v=jAmt(e);
+    if(/closing stock|stock.in.trade|inventor/.test(l)){stockAsset+=v;return;}
+    if(/debtor|receivable/.test(l))M.b.debtors+=v;
+    else if(/cash/.test(l)&&/bank/.test(l))push(M.banks,h,v);
+    else if(/^cash/.test(l))M.b.cash+=v;
+    else if(/bank/.test(l))push(M.banks,h,v);
+    else if(/advance|loans?\s*(&|and)\s*adv|loan.*given/.test(l))M.b.advances+=v;
+    else{if(/fixed|property|plant|machinery|furniture|equipment|vehicle|computer|building|land/.test(l)&&v)fixedSeen=true;push(M.otherAssets,h||'Other asset',v);}});
+  if(!M.t.closingStock&&stockAsset)M.t.closingStock=stockAsset;
+  if(fixedSeen)M.notes.push('Fixed-asset heads were imported under “Other assets” (no depreciation). Use the Fixed Assets table if depreciation is needed.');
+  const cp=bs.capital;
+  if(kind==='prop'){if(cp&&typeof cp==='object')M.cap={openCapital:num(cp.opening),capIntro:num(cp.introduced),drawings:num(cp.drawings)};
+    else if(capHead)M.notes.push('Capital Account ('+inr(capHead)+') was not imported: the file has no opening/introduced/drawings split.');}
+  else if(capHead||(cp&&(num(cp.opening)||num(cp.introduced)||num(cp.drawings))))M.notes.push('Capital is entered partner-wise / under reserves for this entity type, so the capital figures ('+inr(capHead||num(cp&&cp.opening))+') were not imported. Enter them on the Balance Sheet.');
+  return M;
+}
+function jApply(y,M,kind){
+  const t=y.trading,b=y.bs,L=a=>a.map(x=>({n:x.n,v:x.v}));
+  t.openStock=M.t.openStock;t.purchases=M.t.purchases;t.sales=M.t.sales;t.closingStock=M.t.closingStock;
+  t.direct=M.direct.length?L(M.direct):[{n:'Freight & Carriage',v:0},{n:'Wages',v:0}];
+  y.pl.indirect=M.indirect.length?L(M.indirect):[{n:'Salaries',v:0},{n:'Rent',v:0},{n:'Office Expenses',v:0},{n:'Interest on Loan',v:0}];
+  y.pl.income=M.income.length?L(M.income):[{n:'Interest Received',v:0}];
+  Object.keys(M.b).forEach(k=>{b[k]=M.b[k];});
+  b.debtorList=[];b.creditorList=[];b.loanList=[];
+  b.banks=M.banks.length?L(M.banks):[{n:'Bank Account',v:0}];b.otherLiab=L(M.otherLiab);b.otherAssets=L(M.otherAssets);
+  if(M.cap){b.openCapital=M.cap.openCapital;b.capIntro=M.cap.capIntro;b.drawings=M.cap.drawings;}
+  y.updated=Date.now();y.jimp={at:Date.now(),gen:(y.jimp&&y.jimp.gen)||''};
+}
+function jBuild(P){
+  const ex=P.cid?DB.clients.find(c=>c.id===P.cid):null,ctype=ex?ex.type:P.type,tmpC=ex?JSON.parse(JSON.stringify(ex)):{id:'tmp',name:P.name,pan:P.pan,type:ctype,hasTrading:P.hasT,years:{}};
+  const kind=kindOf(tmpC),M=jMap(P,kind),exy=ex&&ex.years[P.fy]?ex.years[P.fy]:null;
+  const ty=exy?JSON.parse(JSON.stringify(exy)):blankYear(P.fy,tmpC);jApply(ty,M,kind);
+  const m=compute(tmpC,ty);return{ex,exy,M,kind,tmpC,m};
+}
+const jSum=a=>(a||[]).reduce((s,x)=>s+num(x.v),0);
+function jPrev(){
+  const J=IMPJ;let h='<p class="hint" style="margin-top:0">File: <b>'+esc(J.name)+'</b>. Check the values below. Nothing is saved until you press <b>Confirm &amp; import</b>.</p><div class="scroll" style="max-height:62vh;padding:10px">';
+  J.plans.forEach((P,i)=>{
+    h+='<div style="margin-bottom:14px"><div style="font-weight:700;font-size:14px">'+esc(P.name||'(no name)')+' <span class="tag t1">PAN '+esc(P.pan||'—')+'</span> <span class="tag t4">FY '+esc(P.fy||'—')+'</span></div>';
+    if(P.err){h+='<div class="bar err" style="margin:8px 0">✕ Cannot import: '+esc(P.err)+'</div></div>';return;}
+    const B=jBuild(P),ex=B.ex,y=B.exy,M=B.M;
+    h+='<label class="sw" style="margin:6px 0"><input type="checkbox" class="chk" data-chg="jsonInc" data-i="'+i+'"'+(P.inc?' checked':'')+'><span class="tg"></span>Import this client</label>';
+    if(ex)h+='<div class="bar" style="margin:6px 0">✓ PAN verified – matches existing client <b>'+esc(ex.name)+'</b>'+(y?'. <b>FY '+esc(P.fy)+' already has data and will be REPLACED</b> by the values below.':'. FY '+esc(P.fy)+' will be created.')+'</div>';
+    else h+='<div class="bar err" style="margin:6px 0;display:block">⚠ PAN <b>'+esc(P.pan)+'</b> does not match any client in this portal. Confirming will <b>create a new client</b> “'+esc(P.name)+'” and import FY '+esc(P.fy)+'.'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center;font-weight:500"><span>Entity type</span><select class="in" style="width:auto" data-chg="jsonType" data-i="'+i+'">'+['Proprietorship','Partnership','LLP','Company'].map(t=>'<option'+(P.type===t?' selected':'')+'>'+t+'</option>').join('')+'</select><label class="sw"><input type="checkbox" class="chk" data-chg="jsonTrade" data-i="'+i+'"'+(P.hasT?' checked':'')+'><span class="tg"></span>Has trading account</label></div></div>';
+    P.warn.forEach(w=>{h+='<div class="hint" style="color:#ffb3b3">⚠ '+esc(w)+'</div>';});
+    P.notes.concat(M.notes).forEach(w=>{h+='<div class="hint">ℹ '+esc(w)+'</div>';});
+    if(ex&&!ex.hasTrading&&(M.t.sales||M.t.purchases||M.t.openStock||M.t.closingStock))h+='<div class="hint" style="color:#ffb3b3">⚠ This client has no trading account, so sales/purchases/stock will be stored but ignored in the statements.</div>';
+    const row=(l,e,n,bold)=>{const same=y&&num(e)===num(n);return'<tr'+(bold?' style="font-weight:700"':'')+'><td>'+esc(l)+'</td><td class="r" style="color:var(--mut)">'+(y?inr(num(e)):'–')+'</td><td class="r"'+(y&&!same?' style="font-weight:700"':'')+'>'+inr(num(n))+'</td></tr>';};
+    const sec=s=>'<tr><td colspan="3" class="sub" style="padding-top:12px">'+s+'</td></tr>';
+    const lst=(L,E,lab)=>L.map(r=>{const f=y&&(E||[]).find(x=>(x.n||'').trim().toLowerCase()===r.n.toLowerCase());return row(r.n,f?f.v:0,r.v);}).join('')+(L.length||(y&&jSum(E))?row('Total '+lab,jSum(E),jSum(L),1):'');
+    const t=y&&y.trading||{},b=y&&y.bs||{},p=y&&y.pl||{};
+    let tb='<table><tr><th>Item</th><th class="r">Existing in portal</th><th class="r">Incoming from file</th></tr>'+sec('Trading account')+row('Opening stock',t.openStock,M.t.openStock)+row('Purchases',t.purchases,M.t.purchases)+row('Sales',t.sales,M.t.sales)+row('Closing stock',t.closingStock,M.t.closingStock)+
+      sec('Direct expenses')+lst(M.direct,t.direct,'direct expenses')+sec('Indirect expenses')+lst(M.indirect,p.indirect,'indirect expenses')+sec('Other income')+lst(M.income,p.income,'income')+sec('Liabilities')+
+      (B.M.cap?row('Capital – opening',b.openCapital,M.cap.openCapital)+row('Capital introduced',b.capIntro,M.cap.capIntro)+row('Drawings',b.drawings,M.cap.drawings):'')+row('Secured loans',b.secured,M.b.secured)+row('Unsecured loans',b.unsecured,M.b.unsecured)+row('Sundry creditors',y?(jSum(b.creditorList)?jSum(b.creditorList):b.creditors):0,M.b.creditors)+row('Advances received',b.advRecd,M.b.advRecd)+row('Duties & taxes',b.taxes,M.b.taxes)+lst(M.otherLiab,b.otherLiab,'other liabilities')+
+      sec('Assets')+row('Sundry debtors',y?(jSum(b.debtorList)?jSum(b.debtorList):b.debtors):0,M.b.debtors)+row('Cash in hand',b.cash,M.b.cash)+lst(M.banks,b.banks,'bank balances')+row('Loans & advances given',b.advances,M.b.advances)+lst(M.otherAssets,b.otherAssets,'other assets')+'</table>';
+    h+='<div style="overflow-x:auto">'+tb+'</div>';
+    const fnp=num(P.doc.profitAndLoss&&P.doc.profitAndLoss.netProfit),dn=Math.abs(B.m.np-fnp)>1;
+    h+='<div class="tot'+(dn?' rd':'')+'"><span>Net profit / (loss) – portal will compute</span><span>'+money(B.m.np)+'</span></div>'+(dn?'<div class="hint" style="color:#ffb3b3">⚠ The file states net profit '+money(fnp)+', which differs from the portal’s calculation. Check the heads above.</div>':'<div class="hint">Matches the net profit in the file ('+money(fnp)+').</div>');
+    if(y)h+='<div class="hint">Not touched by this import: fixed-asset table, partners, party-wise lists are cleared only where the file supplies the single figure (debtors / creditors / loans).</div>';
+    h+='</div>';
+  });
+  const ok=J.plans.some(p=>!p.err&&p.inc);
+  showModal('<div class="mbox" style="max-width:880px"><h2>Import from KRN Billing – preview</h2>'+h+'</div><div class="mfoot"><button class="btn s" data-act="jsonCancel">Cancel</button>'+(ok?'<button class="btn" data-act="jsonConfirm">Confirm &amp; import</button>':'')+'</div></div>');
+}
+Object.assign(A,{
+  jsonFile(_v,el){const f=el.files&&el.files[0];if(!f)return;
+    const r=new FileReader();r.onload=()=>{
+      let doc;try{doc=JSON.parse(String(r.result).replace(/^﻿/,''));}catch(e){IMP.err='This file is not valid JSON.';IMP.name=f.name;renderImport();return;}
+      const docs=Array.isArray(doc)?doc:Array.isArray(doc&&doc.clients)?doc.clients:[doc];
+      const good=docs.filter(d=>d&&typeof d==='object'&&d.client&&(d.format==='KRN-BILLING-EXPORT'||d.financialYear));
+      if(!good.length){IMP.err='This does not look like a KRN Billing export (format KRN-BILLING-EXPORT).';IMP.name=f.name;renderImport();return;}
+      IMPJ={name:f.name,plans:good.map(jPlan)};jPrev();};
+    r.onerror=()=>{IMP.err='Could not read the file.';renderImport();};r.readAsText(f);},
+  jsonInc(v,el){IMPJ.plans[+el.dataset.i].inc=!!v;jPrev();},
+  jsonType(v,el){IMPJ.plans[+el.dataset.i].type=v;jPrev();},
+  jsonTrade(v,el){IMPJ.plans[+el.dataset.i].hasT=!!v;jPrev();},
+  jsonCancel(){IMPJ=null;closeModal();},
+  jsonConfirm(){
+    if(!IMPJ)return;let nc=0,ny=0,rep=0,last=null;
+    IMPJ.plans.forEach(P=>{if(P.err||!P.inc)return;
+      let c=P.cid?DB.clients.find(x=>x.id===P.cid):null;
+      if(!c){c={id:uid(),name:P.name,trade:'',pan:P.pan,type:P.type,address:P.address,signatory:'',place:'',hasTrading:P.hasT,years:{},created:Date.now()};DB.clients.push(c);nc++;}
+      else if(!c.pan||c.pan.length<10)c.pan=P.pan;
+      let y=c.years[P.fy];if(y)rep++;else{y=blankYear(P.fy,c);c.years[P.fy]=y;}
+      jApply(y,jMap(P,kindOf(c)),kindOf(c));y.jimp.gen=P.doc.generatedAt||'';ny++;last={c,fy:P.fy};});
+    IMPJ=null;save();closeModal();
+    if(last&&ny===1){UI.cid=last.c.id;UI.fy=last.fy;UI.view='pl';}else UI.view='clients';
+    render();toast(ny+' year(s) imported'+(nc?', '+nc+' client(s) created':'')+(rep?', '+rep+' replaced':''));
+  }
+});
 /* ================= init ================= */
 if(getPW()&&isUnlocked()){render();syncOnOpen();}else showLock(getPW()?'login':'setup');
 </script></body></html>
